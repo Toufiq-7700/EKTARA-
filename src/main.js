@@ -12,6 +12,7 @@ import { initAudio, playScore, pausePlayback, resumePlayback, stopPlayback,
          setEvolve, setAmbientType, getPlaybackState, getCurrentTime } from './audio/engine.js';
 import { initVisuals, startVisuals, stopVisuals, updateScore, 
          setXRay, setZoom, onVisualEvent, setTheme } from './visuals/renderer.js';
+import { buildUI } from './ui/controls.js';
 
 // ─── Default parameters (the state) ──────────────────────────────
 
@@ -80,7 +81,14 @@ beginBtn.addEventListener('click', async () => {
   // Start playback with visual event callback
   playScore(currentScore, onScoreEvent);
 
-  // TODO: Initialize UI controls (Prompt 4)
+  // Initialize UI controls
+  buildUI(uiOverlay, {
+    getParams, setParams, rebuildAndPlay, saveParamsToHash,
+    pausePlayback, resumePlayback, stopPlayback,
+    setMasterVolume, setLayerVolume, setLayerMute,
+    setSleepTimer, setEvolve, setAmbientType,
+    setCurrentTheme, toggleXRay, setZoomLevel
+  });
 
   console.log('🌳 Recursive Garden started');
 });
