@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recursive Garden</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <!-- Welcome screen -->
+  <div id="welcome-screen" class="welcome-screen">
+    <div class="welcome-content">
+      <h1 class="welcome-title">🌳 Recursive Garden</h1>
+      <p class="welcome-subtitle">
+        Four recursive algorithms weave melody, rhythm, bass, and visuals
+        into a living, breathing garden. Put on headphones for the best experience.
+      </p>
+      <button id="begin-btn" class="begin-btn" aria-label="Begin the experience">
+        Begin
+      </button>
+      <p class="welcome-hint">🎧 Headphones recommended</p>
+    </div>
+  </div>
+
+  <!-- Main canvas (hidden until Begin is clicked) -->
+  <canvas id="garden-canvas" class="garden-canvas" style="display:none;"></canvas>
+
+  <!-- UI overlay container (hidden until Begin is clicked) -->
+  <div id="ui-overlay" style="display:none;"></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
