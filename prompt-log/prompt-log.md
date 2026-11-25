@@ -293,3 +293,42 @@ Upgraded the rain into a coupled audiovisual system across Canvas 2D and Tone.js
 
 ---
 
+## Prompt 9: Algorithm Lab & Linked Garden Views
+
+### Prompt
+
+The recursive algorithms are not visible enough. Add an "Algorithm Lab" so users can see each algorithm running, choose which ones are active, and understand what each one contributes.
+
+1. TWO VIEWS with a clear toggle at the top: "Garden" (the current scene) and "Lab". Also allow a split view on wide screens (Garden on the left, Lab on the right). On mobile, the Lab is a full-screen tab.
+2. ALGORITHM SELECTOR: four large cards, one per algorithm (Melody: Norgard, Bass: Hanoi, Rhythm: Euclidean, Tree: L-system), each with:
+   - an on/off switch (turning one off removes it from BOTH the sound and the visuals)
+   - a "Solo" button (play only this algorithm, mute the others, and show only its visual layer in the Garden)
+   - a colour that is used consistently everywhere for that algorithm
+   - a one-line description in plain English
+3. A DEDICATED LIVE SIMULATION for each algorithm, shown large when its card is selected, animating in sync with the audio clock:
+   - NORGARD: draw the recursion as a binary tree. n(k) at the root splits into n(k/2) etc., showing how each value is computed from smaller ones ("n(6) = -n(3) = -(n(1)+1) = ..."). Under it, show the resulting number sequence as a row of tiles, and as a pitch-contour line graph (value vs time). The currently playing tile and its tree path light up. Also draw the self-similarity: show the sequence, and the same sequence at half speed overlaid, to make the "melody inside itself" visible.
+   - HANOI: a large, clear 3-peg animation with discs sliding in arcs. Show the recursive call tree beside it (hanoi(3) -> hanoi(2) + move + hanoi(2) ...) with the active call highlighted, plus "Move 5 of 7" and the rule "disc 1 moves every second step". Show how each move becomes a bass note (peg -> pitch, disc size -> length) with a small label appearing on each move.
+   - EUCLIDEAN: show the Bjorklund recursion as groups being merged step by step (e.g. [x][x][x][.][.][.][.][.] -> [x.][x.][x.][.][.] -> [x..][x..][x.]), animated, ending in the final pattern on a circle with a sweeping hand and hit dots. Show k and n as sliders with immediate redraw.
+   - L-SYSTEM: show the rewriting string growing generation by generation (generation 0, 1, 2, 3 ...) with the symbols coloured, and the turtle drawing the tree step by step beside it, with the current symbol highlighted and the turtle cursor visible. A slider scrubs through generations.
+4. PLAYBACK CONTROLS FOR THE LAB: play/pause, step forward/back one recursive step, speed (0.25x to 2x), and "Replay from start". Step mode plays one event at a time with a caption in plain English, e.g. "Norgard(5) = 1 -> scale degree 1 -> note E4".
+5. "WHAT YOU HEAR" strip at the bottom: four mini horizontal timelines (one per algorithm) scrolling in time, with event blocks in the algorithm's colour, like a simple piano roll, so users see how the layers combine into the music.
+6. LINKED HIGHLIGHTING between Lab and Garden: hovering an item in the Lab outlines the matching branch, disc, or firefly in the Garden, and vice versa.
+
+Design rules: calm and uncluttered, large readable text (min 14px), colour not the only signal (also use shapes and labels), keyboard accessible, and reduced-motion support (replace smooth animation with step transitions). Performance: Lab canvases only render when visible. Save the prompt log.
+
+### Response
+
+Built the interactive **Algorithm Lab** with dual/split views, live synchronized simulations, step mode, timeline piano roll, and bidirectional Garden highlighting:
+- **Consistent Algorithm Identity & Captions (`src/algorithms/meta.js`, `src/algorithms/bjorklund.js`)**: Defined canonical colors, shape badges (`◆`, `▬`, `●`, `▲`), plain-English descriptions, `formatEventCaption(event)`, and `bjorklundSteps(pulses, steps)` for step-by-step group merging.
+- **View Switcher & Responsive Split/Tab Layout (`index.html`, `src/styles.css`, `src/main.js`, `src/ui/controls.js`)**: Added top `Garden | Split | Lab` toggle (`Split` hidden on mobile `<= 900px` so `Lab` acts as a full-screen tab), auto-collapsing the control drawer cleanly (`collapsed` class) when entering Split/Lab.
+- **Algorithm Selector Cards (`src/lab/labController.js`)**: 4 interactive cards with On/Off switches and Solo buttons affecting both Tone.js voices (`setAlgorithmEnabled`) and Garden layers (`setVisualAlgorithmEnabled`).
+- **4 Dedicated Live Simulations**:
+  - `src/lab/simNorgard.js`: Binary recursive derivation tree + equation string, hoverable sequence tiles, and pitch-contour graph with half-speed `n(⌊k/2⌋)` self-similarity overlay.
+  - `src/lab/simHanoi.js`: 3-peg disc arc animation, move counter, smallest-disc rule, pitch/duration mapping badge, and scrolling recursive call tree.
+  - `src/lab/simEuclidean.js`: Step-by-step Bjorklund group-merge animation, immediate `k`/`n` sliders, and circular rhythm wheel with sweeping hand and hit dots.
+  - `src/lab/simLSystem.js`: Generation scrubber slider, color-coded rewriting string across generations with highlighted active symbol, and step-by-step turtle drawing with cursor.
+- **Lab Playback, Step Mode & "What You Hear" Strip (`src/lab/timelineStrip.js`, `src/audio/engine.js`)**: Added `setPlaybackSpeed(0.25–2×)`, `previewEvent`, Step Back/Forward with plain-English captions, Replay, and a 4-track scrolling piano roll supporting hover and click-to-step.
+- **Bidirectional Linked Highlighting & Performance (`src/visuals/renderer.js`, `tree.js`, `hanoi.js`, `fireflies.js`)**: Added `hitTestGarden`, `setHoveredTarget`, and `setExternalVisualTime`; Lab `requestAnimationFrame` only runs when visible, and reduced-motion uses step transitions.
+
+---
+

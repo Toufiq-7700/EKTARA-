@@ -32,6 +32,7 @@ let currentAmbientType = 'wind';
 let currentRainIntensity = 0.35;
 let currentThunderEnabled = true;
 let masterVolumeNormalized = 0.8;
+let playbackSpeed = 1.0;
 let currentScore = null;
 let onEventCallback = null;
 let onPlaybackStateChange = null;
@@ -45,6 +46,21 @@ const layerMuted = {
   percussion: false,
   ambient: false
 };
+const algorithmDisabled = {
+  norgard: false,
+  hanoi: false,
+  bjorklund: false,
+  lsystem: false
+};
+
+function isVoiceEffectivelyMuted(voice) {
+  if (layerMuted[voice]) return true;
+  if ((voice === 'melody' || voice === 'canon') && algorithmDisabled.norgard) return true;
+  if (voice === 'canon' && algorithmDisabled.lsystem) return true;
+  if (voice === 'bass' && algorithmDisabled.hanoi) return true;
+  if (voice === 'percussion' && algorithmDisabled.bjorklund) return true;
+  return false;
+}
 
 /**
  * Register a listener invoked when playback starts/pauses/stops (e.g., sleep timer).
@@ -144,10 +160,17 @@ export function playScore(score, onEvent, options = {}) {
   scheduledEvents = [];
 
   for (const event of score.events) {
-    const transportTime = START_OFFSET_SECONDS + event.time;
+    const transportTime = START_OFFSET_SECONDS + event.time / playbackSpeed;
     const id = transport.schedule((time) => {
+      const liveMuted = {
+        melody: isVoiceEffectivelyMuted('melody'),
+        canon: isVoiceEffectivelyMuted('canon'),
+        bass: isVoiceEffectivelyMuted('bass'),
+        percussion: isVoiceEffectivelyMuted('percussion'),
+        ambient: isVoiceEffectivelyMuted('ambient')
+      };
       try {
-        triggerScoreEvent(graph, event, time, layerMuted);
+        triggerScoreEvent(graph, { ...event, duration: event.duration / playbackSpeed }, time, liveMuted);
       } catch (err) {
         console.warn('Audio event error:', err.message);
       }
@@ -160,7 +183,7 @@ export function playScore(score, onEvent, options = {}) {
   }
 
   // Schedule seamless loop or Evolve transition at end of score
-  const cycleEnd = START_OFFSET_SECONDS + score.duration;
+  const cycleEnd = START_OFFSET_SECONDS + score.duration / playbackSpeed;
   loopId = transport.schedule((time) => {
     setTimeout(() => {
       if (!isPlaying) return;
@@ -414,7 +437,65 @@ export function getPlaybackState() {
  * Get current score playback position (seconds) for syncing visuals.
  */
 export function getCurrentTime() {
-  return Math.max(0, Tone.getTransport().seconds - START_OFFSET_SECONDS);
+  return Math.max(0, (Tone.getTransport().seconds - START_OFFSET_SECONDS) * playbackSpeed);
+}
+
+/**
+ * Enable or disable an algorithm layer (synced with Algorithm Lab cards).
+ */
+export function setAlgorithmEnabled(algorithmId, enabled) {
+  algorithmDisabled[algorithmId] = !enabled;
+  if (!graph) return;
+  if (graph.channels.melody) {
+    graph.channels.melody.mute = isVoiceEffectivelyMuted('melody');
+  }
+  if (graph.channels.canon) {
+    graph.channels.canon.mute = isVoiceEffectivelyMuted('canon');
+  }
+  if (graph.channels.bass) {
+    graph.channels.bass.mute = isVoiceEffectivelyMuted('bass');
+  }
+  if (graph.channels.percussion) {
+    graph.channels.percussion.mute = isVoiceEffectivelyMuted('percussion');
+  }
+}
+
+/**
+ * Set Lab playback speed multiplier (0.25x to 2x) and smoothly reschedule if needed.
+ */
+export function setPlaybackSpeed(speed) {
+  const clamped = Math.max(0.25, Math.min(2, Number(speed) || 1));
+  if (Math.abs(clamped - playbackSpeed) < 0.001) return;
+  playbackSpeed = clamped;
+  if (currentScore && isInitialized && isPlaying) {
+    playScore(currentScore, onEventCallback, { skipFadeIn: true });
+  }
+}
+
+export function getPlaybackSpeed() {
+  return playbackSpeed;
+}
+
+/**
+ * Preview a single recursive score event immediately (used by Lab Step Mode).
+ */
+export function previewEvent(event) {
+  if (!isInitialized || !graph || !event) return;
+  try {
+    const now = Tone.now() + 0.02;
+    const previewDur = Math.min(1.2, Math.max(0.12, event.duration || 0.3));
+    triggerScoreEvent(
+      graph,
+      { ...event, duration: previewDur },
+      now,
+      {
+        melody: isVoiceEffectivelyMuted('melody'),
+        canon: isVoiceEffectivelyMuted('canon'),
+        bass: isVoiceEffectivelyMuted('bass'),
+        percussion: isVoiceEffectivelyMuted('percussion')
+      }
+    );
+  } catch (_) { /* ignore */ }
 }
 
 /**

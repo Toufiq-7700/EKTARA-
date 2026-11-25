@@ -133,12 +133,21 @@ export function computeTreeBranches(commands, branchAngles, baseAngle, startX, s
 /**
  * Draw the tree branches on canvas.
  */
-export function drawTree(ctx, branches, theme, activeEvents, time, windPhase, reducedMotion) {
+export function drawTree(
+  ctx,
+  branches,
+  theme,
+  activeEvents,
+  time,
+  windPhase,
+  reducedMotion,
+  { glowEnabled = true, highlightedBranchIdx = null, highlightColor = '#f0c878' } = {}
+) {
   if (!branches || branches.length === 0) return;
 
   // Build a set of active branch indices from melody events
   const activeBranches = new Set();
-  if (activeEvents) {
+  if (glowEnabled && activeEvents) {
     for (const evt of activeEvents) {
       if (evt.meta?.algorithm === 'norgard') {
         activeBranches.add(evt.meta.index % branches.length);
@@ -166,14 +175,23 @@ export function drawTree(ctx, branches, theme, activeEvents, time, windPhase, re
     const lineWidth = Math.max(0.6, maxWidth - branch.depth * 0.8);
 
     const isActive = activeBranches.has(branch.index);
+    const isHighlighted = highlightedBranchIdx !== null &&
+      (branch.index % branches.length) === (highlightedBranchIdx % branches.length);
 
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
-    ctx.lineWidth = lineWidth;
+    ctx.lineWidth = isHighlighted ? lineWidth + 3 : lineWidth;
     ctx.lineCap = 'round';
 
-    if (isActive) {
+    if (isHighlighted) {
+      ctx.save();
+      ctx.strokeStyle = highlightColor;
+      ctx.shadowColor = highlightColor;
+      ctx.shadowBlur = 18;
+      ctx.stroke();
+      ctx.restore();
+    } else if (isActive) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.strokeStyle = theme.tree.glow;

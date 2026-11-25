@@ -22,8 +22,20 @@
     </div>
   </div>
 
-  <!-- Main canvas (hidden until Begin is clicked) -->
-  <canvas id="garden-canvas" class="garden-canvas" style="display:none;"></canvas>
+  <!-- Top View Switcher (Garden / Split / Lab) -->
+  <nav id="view-switcher" class="view-switcher" aria-label="Workspace view" style="display:none;">
+    <button class="view-tab active" data-view="garden" aria-pressed="true">🌳 Garden</button>
+    <button class="view-tab split-only" data-view="split" aria-pressed="false">◫ Split</button>
+    <button class="view-tab" data-view="lab" aria-pressed="false">🔬 Lab</button>
+  </nav>
+
+  <!-- Workspace: Garden stage + Algorithm Lab -->
+  <div id="workspace-layout" class="workspace-layout view-garden" style="display:none;">
+    <div id="garden-stage" class="garden-stage">
+      <canvas id="garden-canvas" class="garden-canvas"></canvas>
+    </div>
+    <section id="lab-panel" class="lab-panel" aria-label="Algorithm Lab" style="display:none;"></section>
+  </div>
 
   <!-- UI overlay container (hidden until Begin is clicked) -->
   <div id="ui-overlay" style="display:none;"></div>

@@ -72,7 +72,7 @@ export function updateFireflies(state, dt, time) {
 /**
  * Draw the firefly ring and connecting polygon.
  */
-export function drawFireflies(ctx, state, theme) {
+export function drawFireflies(ctx, state, theme, highlightedStep = null) {
   // Draw the connecting polygon (only active/hit fireflies)
   const activePoints = state.fireflies.filter(ff => ff.isHit);
   if (activePoints.length > 2) {
@@ -94,33 +94,44 @@ export function drawFireflies(ctx, state, theme) {
   }
 
   // Draw each firefly
-  for (const ff of state.fireflies) {
+  const len = state.fireflies.length;
+  for (let i = 0; i < len; i++) {
+    const ff = state.fireflies[i];
     const size = ff.isHit ? 3 : 1.5;
     const baseAlpha = ff.isHit ? 0.4 : 0.15;
     const glowAlpha = ff.brightness;
+    const isHighlighted = highlightedStep !== null && (highlightedStep % len) === i;
 
     // Outer glow
-    if (glowAlpha > 0.05) {
+    if (glowAlpha > 0.05 || isHighlighted) {
       const gradient = ctx.createRadialGradient(
         ff.baseX, ff.baseY, 0,
-        ff.baseX, ff.baseY, 15
+        ff.baseX, ff.baseY, isHighlighted ? 20 : 15
       );
-      gradient.addColorStop(0, theme.firefly.glow);
+      gradient.addColorStop(0, isHighlighted ? '#a0f078' : theme.firefly.glow);
       gradient.addColorStop(1, 'transparent');
       ctx.beginPath();
-      ctx.arc(ff.baseX, ff.baseY, 15, 0, Math.PI * 2);
+      ctx.arc(ff.baseX, ff.baseY, isHighlighted ? 20 : 15, 0, Math.PI * 2);
       ctx.fillStyle = gradient;
-      ctx.globalAlpha = glowAlpha * 0.5;
+      ctx.globalAlpha = isHighlighted ? 0.7 : glowAlpha * 0.5;
       ctx.fill();
       ctx.globalAlpha = 1;
     }
 
     // Core dot
     ctx.beginPath();
-    ctx.arc(ff.baseX, ff.baseY, size + glowAlpha * 3, 0, Math.PI * 2);
-    ctx.fillStyle = theme.firefly.glow;
-    ctx.globalAlpha = baseAlpha + glowAlpha * 0.6;
+    ctx.arc(ff.baseX, ff.baseY, size + glowAlpha * 3 + (isHighlighted ? 2 : 0), 0, Math.PI * 2);
+    ctx.fillStyle = isHighlighted ? '#ffffff' : theme.firefly.glow;
+    ctx.globalAlpha = isHighlighted ? 1 : baseAlpha + glowAlpha * 0.6;
     ctx.fill();
+
+    if (isHighlighted) {
+      ctx.beginPath();
+      ctx.arc(ff.baseX, ff.baseY, 10, 0, Math.PI * 2);
+      ctx.strokeStyle = '#a0f078';
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+    }
     ctx.globalAlpha = 1;
   }
 }

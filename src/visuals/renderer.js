@@ -45,6 +45,14 @@ let currentScore = null;
 let activeEvents = [];
 let xrayEnabled = false;
 let reducedMotion = false;
+let externalTime = null;
+let hoveredTarget = null;
+const visibleAlgorithms = {
+  norgard: true,
+  hanoi: true,
+  bjorklund: true,
+  lsystem: true
+};
 
 // Growth & crossfade animation
 let growthProgress = 0;
@@ -229,6 +237,133 @@ export function setVisualRainIntensity(intensity) {
   }
 }
 
+/**
+ * Toggle visibility of an algorithm's visual layer in the Garden.
+ */
+export function setVisualAlgorithmEnabled(algorithmId, enabled) {
+  visibleAlgorithms[algorithmId] = !!enabled;
+}
+
+/**
+ * Override clock time (used when Lab Step Mode scrubs to a specific timestamp).
+ */
+export function setExternalVisualTime(timeOrNull) {
+  externalTime = timeOrNull;
+  if (timeOrNull !== null && currentScore) {
+    // Recompute Hanoi disc state up to timeOrNull cleanly
+    const hanoiDepth = Math.min(currentScore.params?.depth || 4, 6);
+    hanoiState = createHanoiState(hanoiDepth);
+    processedHanoiSteps.clear();
+    processedPercSteps.clear();
+    eventCursor = 0;
+    lastAudioTime = 0;
+    activeEvents = [];
+    for (const ev of currentScore.events) {
+      if (ev.time > timeOrNull) break;
+      if (ev.voice === 'bass' && ev.meta?.algorithm === 'hanoi' && !processedHanoiSteps.has(ev.meta.step)) {
+        processedHanoiSteps.add(ev.meta.step);
+        // Apply immediately without waiting for arc animation
+        const fromPeg = hanoiState.pegs[ev.meta.from];
+        const idx = fromPeg.indexOf(ev.meta.disc);
+        if (idx !== -1) fromPeg.splice(idx, 1);
+        hanoiState.pegs[ev.meta.to].push(ev.meta.disc);
+      }
+      if (timeOrNull - ev.time <= 1.2) {
+        activeEvents.push({ ...ev, arrivalTime: elapsedTime });
+        if (ev.voice === 'percussion' && fireflyState) {
+          triggerFirefly(fireflyState, ev.meta.step);
+        }
+      }
+    }
+    growthProgress = 1;
+  }
+}
+
+/**
+ * Set linked-highlighting target from Lab or Garden hover.
+ */
+export function setHoveredTarget(target) {
+  hoveredTarget = target || null;
+}
+
+/**
+ * Hit-test Garden canvas coordinates (logical CSS pixels relative to canvas top-left)
+ * for linked highlighting back to the Algorithm Lab.
+ */
+export function hitTestGarden(clientX, clientY) {
+  if (!canvas || !currentScore) return null;
+  const rect = canvas.getBoundingClientRect();
+  let x = clientX - rect.left;
+  let y = clientY - rect.top;
+  const w = rect.width;
+  const h = rect.height;
+  const groundY = h * 0.78;
+  const treeX = w / 2;
+
+  // Invert zoom transform
+  if (Math.abs(zoomLevel - 1) > 0.005) {
+    x = (x - w / 2) / zoomLevel + w / 2;
+    y = (y - groundY * 0.85) / zoomLevel + groundY * 0.85;
+  }
+
+  // 1. Fireflies
+  if (visibleAlgorithms.bjorklund && fireflyState) {
+    for (let i = 0; i < fireflyState.fireflies.length; i++) {
+      const ff = fireflyState.fireflies[i];
+      const dx = x - ff.baseX;
+      const dy = y - ff.baseY;
+      if (dx * dx + dy * dy <= 196) {
+        return { algorithm: 'bjorklund', step: i };
+      }
+    }
+  }
+
+  // 2. Hanoi pillars/discs
+  if (visibleAlgorithms.hanoi && hanoiState) {
+    const scale = 0.8;
+    const pegPositions = { A: -100, B: 0, C: 100 };
+    const discHeight = 10 * scale;
+    const maxDiscWidth = 50 * scale;
+    for (const peg of ['A', 'B', 'C']) {
+      const px = treeX + pegPositions[peg] * scale;
+      const discs = hanoiState.pegs[peg];
+      for (let i = 0; i < discs.length; i++) {
+        const disc = discs[i];
+        const dw = (disc / hanoiState.numDiscs) * maxDiscWidth;
+        const dy = groundY + 5 - (i + 1) * discHeight;
+        if (x >= px - dw - 4 && x <= px + dw + 4 && y >= dy - 4 && y <= dy + discHeight + 4) {
+          return { algorithm: 'hanoi', disc, peg };
+        }
+      }
+    }
+  }
+
+  // 3. Tree branches (sampled closest segment within 10px)
+  if (visibleAlgorithms.lsystem && treeBranches.length > 0) {
+    let best = null;
+    let bestDist = 100;
+    const step = Math.max(1, Math.floor(treeBranches.length / 400));
+    for (let i = 0; i < treeBranches.length; i += step) {
+      const b = treeBranches[i];
+      const mx = (b.x1 + b.x2) * 0.5;
+      const my = (b.y1 + b.y2) * 0.5;
+      const d2 = (x - mx) * (x - mx) + (y - my) * (y - my);
+      if (d2 < bestDist) {
+        bestDist = d2;
+        best = b;
+      }
+    }
+    if (best) {
+      return {
+        algorithm: visibleAlgorithms.norgard ? 'norgard' : 'lsystem',
+        index: best.index
+      };
+    }
+  }
+
+  return null;
+}
+
 // ─── Main Animation Loop ─────────────────────────────────────────
 
 function animate(now) {
@@ -245,8 +380,12 @@ function animate(now) {
   const groundY = h * 0.78;
   const treeX = w / 2;
 
-  const audioTime = getAudioTimeFn ? getAudioTimeFn() : elapsedTime;
-  updateActiveEvents(audioTime);
+  const audioTime = externalTime !== null
+    ? externalTime
+    : (getAudioTimeFn ? getAudioTimeFn() : elapsedTime);
+  if (externalTime === null) {
+    updateActiveEvents(audioTime);
+  }
 
   // Smooth wind value linked across rain slant and tree sway
   const windValue = Math.sin(elapsedTime * 0.22) * 0.55 + Math.cos(elapsedTime * 0.11) * 0.25 + 0.15;
@@ -285,29 +424,43 @@ function animate(now) {
   ctx.globalAlpha = sceneFade;
 
   // Layer 1: Hanoi pillars and discs
-  if (hanoiState) {
-    updateHanoiAnimation(hanoiState, motionDt);
-    drawHanoi(ctx, hanoiState, currentTheme, treeX, groundY + 5, 0.8);
+  if (visibleAlgorithms.hanoi && hanoiState) {
+    if (externalTime === null) {
+      updateHanoiAnimation(hanoiState, motionDt);
+    }
+    const hanoiDisc = hoveredTarget?.algorithm === 'hanoi' ? hoveredTarget.disc : null;
+    drawHanoi(ctx, hanoiState, currentTheme, treeX, groundY + 5, 0.8, hanoiDisc);
   }
 
   // Mid rain layer (around tree)
   drawRainLayer(ctx, rainState, 1, currentTheme);
 
   // Layer 2: The L-system tree (hero)
-  if (treeBranches.length > 0) {
+  if (visibleAlgorithms.lsystem && treeBranches.length > 0) {
     const visibleBranches = treeBranches.slice(
       0,
       Math.max(1, Math.floor(treeBranches.length * growthProgress))
     );
     const windPhase = elapsedTime * 0.5 + windValue * 0.6;
-    drawTree(ctx, visibleBranches, currentTheme, activeEvents, elapsedTime, windPhase, reducedMotion);
+    const branchHl = (hoveredTarget?.algorithm === 'norgard' || hoveredTarget?.algorithm === 'lsystem')
+      ? hoveredTarget.index
+      : null;
+    const hlColor = hoveredTarget?.algorithm === 'lsystem' ? '#f078c8' : '#f0c878';
+    drawTree(ctx, visibleBranches, currentTheme, activeEvents, elapsedTime, windPhase, reducedMotion, {
+      glowEnabled: visibleAlgorithms.norgard,
+      highlightedBranchIdx: branchHl,
+      highlightColor: hlColor
+    });
     updateAndDrawParticles(ctx, particles, currentTheme, elapsedTime, groundY);
   }
 
   // Layer 3: Firefly ring
-  if (fireflyState) {
-    updateFireflies(fireflyState, motionDt, elapsedTime);
-    drawFireflies(ctx, fireflyState, currentTheme);
+  if (visibleAlgorithms.bjorklund && fireflyState) {
+    if (externalTime === null) {
+      updateFireflies(fireflyState, motionDt, elapsedTime);
+    }
+    const fireflyHl = hoveredTarget?.algorithm === 'bjorklund' ? hoveredTarget.step : null;
+    drawFireflies(ctx, fireflyState, currentTheme, fireflyHl);
   }
 
   // Near rain layer + ground splashes + canopy glints (foreground)

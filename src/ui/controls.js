@@ -313,11 +313,14 @@ export function buildUI(container, callbacks) {
   const panelToggle = container.querySelector('#panel-toggle');
 
   // Panel toggle
-  panelToggle.addEventListener('click', () => {
-    panelVisible = !panelVisible;
+  function setPanelOpen(open) {
+    panelVisible = !!open;
     panelContent.style.display = panelVisible ? 'block' : 'none';
+    panel.classList.toggle('collapsed', !panelVisible);
     panelToggle.textContent = panelVisible ? '✕' : '☰';
-  });
+  }
+
+  panelToggle.addEventListener('click', () => setPanelOpen(!panelVisible));
 
   // Auto-hide on idle
   function resetHideTimer() {
@@ -694,7 +697,7 @@ export function buildUI(container, callbacks) {
   return {
     updateControlsFromParams,
     updateZoomDisplay,
-    show: () => { panelContent.style.display = 'block'; panelVisible = true; },
-    hide: () => { panelContent.style.display = 'none'; panelVisible = false; }
+    show: () => setPanelOpen(true),
+    hide: () => setPanelOpen(false)
   };
 }

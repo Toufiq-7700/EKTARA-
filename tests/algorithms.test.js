@@ -6,7 +6,8 @@
 import { describe, it, expect } from 'vitest';
 import { norgard, norgardSequence, clearNorgardCache } from '../src/algorithms/norgard.js';
 import { hanoi, hanoiMoveCount } from '../src/algorithms/hanoi.js';
-import { bjorklund, rotatePattern } from '../src/algorithms/bjorklund.js';
+import { bjorklund, bjorklundSteps, rotatePattern } from '../src/algorithms/bjorklund.js';
+import { formatEventCaption } from '../src/algorithms/meta.js';
 import { lsystem, LSYSTEM_PRESETS } from '../src/algorithms/lsystem.js';
 import { buildScore } from '../src/algorithms/score.js';
 import { degreeToMidi, midiToFreq } from '../src/algorithms/scales.js';
@@ -123,6 +124,13 @@ describe('Bjorklund Euclidean Rhythm', () => {
     expect(rotatePattern(pattern, 1)).toEqual([false, false, true, true]);
     expect(rotatePattern(pattern, 0)).toEqual(pattern);
   });
+
+  it('bjorklundSteps captures intermediate group merging steps accurately', () => {
+    const { steps, pattern } = bjorklundSteps(3, 8);
+    expect(steps.length).toBeGreaterThan(1);
+    expect(steps[0].map(g => g.join(''))).toEqual(['x', 'x', 'x', '.', '.', '.', '.', '.']);
+    expect(pattern).toEqual(bjorklund(3, 8));
+  });
 });
 
 // ─── L-System ─────────────────────────────────────────────────────
@@ -227,6 +235,16 @@ describe('Score Builder', () => {
       expect(score.lsystemCommands.length).toBeLessThanOrEqual(12000);
       expect(score.hanoiMoves.length).toBeLessThanOrEqual(63);
     }
+  });
+
+  it('formats plain-English Lab step captions for each algorithm', () => {
+    const score = buildScore({ seed: 42, depth: 3 });
+    const nEvt = score.events.find(e => e.voice === 'melody');
+    const hEvt = score.events.find(e => e.voice === 'bass');
+    const bEvt = score.events.find(e => e.voice === 'percussion');
+    expect(formatEventCaption(nEvt)).toContain('Nørgård(');
+    expect(formatEventCaption(hEvt)).toContain('Hanoi move');
+    expect(formatEventCaption(bEvt)).toContain('Euclidean E(');
   });
 });
 

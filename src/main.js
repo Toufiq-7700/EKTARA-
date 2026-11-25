@@ -11,12 +11,15 @@ import { initAudio, playScore, pausePlayback, resumePlayback, stopPlayback,
          setMasterVolume, setLayerVolume, setLayerMute, setSleepTimer,
          setEvolve, setAmbientType, setRainIntensity as setAudioRainIntensity,
          setThunderEnabled as setAudioThunderEnabled, getPlaybackState, getCurrentTime,
-         getAudioMixSettings, setPlaybackStateListener } from './audio/engine.js';
+         getAudioMixSettings, setPlaybackStateListener,
+         setAlgorithmEnabled, setPlaybackSpeed, previewEvent } from './audio/engine.js';
 import { exportScoreToWav, exportParamsToJson, triggerBlobDownload } from './audio/export.js';
 import { initVisuals, startVisuals, stopVisuals, updateScore, resizeVisuals,
          setXRay, setZoom, getZoom, onVisualEvent, setTheme,
-         setVisualRainIntensity } from './visuals/renderer.js';
+         setVisualRainIntensity, setVisualAlgorithmEnabled,
+         setExternalVisualTime, setHoveredTarget, hitTestGarden } from './visuals/renderer.js';
 import { buildUI } from './ui/controls.js';
+import { buildAlgorithmLab } from './lab/labController.js';
 
 // ─── Default parameters (the state) ──────────────────────────────
 
@@ -40,12 +43,18 @@ let currentParams = { ...defaultParams };
 let currentScore = null;
 let evolveEnabled = false;
 let uiHandle = null;
+let labHandle = null;
+let currentViewMode = 'garden';
 
 // ─── DOM References ──────────────────────────────────────────────
 
 const beginBtn = document.getElementById('begin-btn');
 const welcomeScreen = document.getElementById('welcome-screen');
+const viewSwitcher = document.getElementById('view-switcher');
+const workspaceLayout = document.getElementById('workspace-layout');
+const gardenStage = document.getElementById('garden-stage');
 const canvas = document.getElementById('garden-canvas');
+const labPanel = document.getElementById('lab-panel');
 const uiOverlay = document.getElementById('ui-overlay');
 const statusBanner = document.getElementById('status-banner');
 const statusMessage = document.getElementById('status-message');
@@ -103,12 +112,16 @@ beginBtn.addEventListener('click', async () => {
 
   // Fade out welcome screen
   welcomeScreen.classList.add('fade-out');
-  canvas.style.display = 'block';
+  viewSwitcher.style.display = 'flex';
+  workspaceLayout.style.display = 'flex';
   uiOverlay.style.display = 'block';
 
   // Resize canvas
   resizeCanvas();
   window.addEventListener('resize', () => {
+    if (currentViewMode === 'split' && window.innerWidth <= 900) {
+      setViewMode('lab');
+    }
     resizeCanvas();
     resizeVisuals();
   });
@@ -137,8 +150,45 @@ beginBtn.addEventListener('click', async () => {
     setSleepTimer, setEvolve: handleSetEvolve, setAmbientType,
     setRainIntensityLevel, setThunderMode,
     setCurrentTheme, toggleXRay, setZoomLevel,
-    exportWav, exportJson, setPlaybackStateListener
+    exportWav, exportJson, setPlaybackStateListener: (fn) => {
+      setPlaybackStateListener((st) => {
+        fn(st);
+        labHandle?.syncPlayState(st.isPlaying);
+      });
+    }
   });
+
+  // Initialize Algorithm Lab
+  labHandle = buildAlgorithmLab(labPanel, {
+    getScore,
+    getParams,
+    setParams,
+    rebuildAndPlay,
+    getCurrentTime,
+    isAudioPlaying: () => getPlaybackState().isPlaying,
+    pausePlayback,
+    resumePlayback,
+    previewEvent,
+    setPlaybackSpeed,
+    setAlgorithmEnabled,
+    setVisualAlgorithmEnabled,
+    setExternalVisualTime,
+    onHoverTarget: handleLinkedHover
+  });
+
+  // View Switcher (Garden / Split / Lab)
+  viewSwitcher.querySelectorAll('.view-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setViewMode(btn.dataset.view);
+    });
+  });
+
+  // Linked highlighting from Garden hover -> Lab
+  canvasEl.addEventListener('mousemove', (e) => {
+    const hit = hitTestGarden(e.clientX, e.clientY);
+    handleLinkedHover(hit);
+  });
+  canvasEl.addEventListener('mouseleave', () => handleLinkedHover(null));
 
   // Scroll wheel zooms into the recursive tree
   canvasEl.addEventListener('wheel', (e) => {
@@ -148,6 +198,49 @@ beginBtn.addEventListener('click', async () => {
     uiHandle?.updateZoomDisplay(nextZoom);
   }, { passive: false });
 });
+
+function handleLinkedHover(target) {
+  setHoveredTarget(target);
+  labHandle?.setHoveredTarget(target);
+}
+
+function setViewMode(mode) {
+  currentViewMode = mode;
+  workspaceLayout.classList.remove('view-garden', 'view-split', 'view-lab');
+  workspaceLayout.classList.add(`view-${mode}`);
+
+  viewSwitcher.querySelectorAll('.view-tab').forEach(btn => {
+    const active = btn.dataset.view === mode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', String(active));
+  });
+
+  if (mode === 'garden') {
+    gardenStage.style.display = 'block';
+    labPanel.style.display = 'none';
+    labHandle?.setVisible(false);
+    startVisuals();
+  } else if (mode === 'split') {
+    uiHandle?.hide();
+    gardenStage.style.display = 'block';
+    labPanel.style.display = 'flex';
+    labHandle?.setVisible(true);
+    startVisuals();
+  } else {
+    uiHandle?.hide();
+    gardenStage.style.display = 'none';
+    labPanel.style.display = 'flex';
+    stopVisuals();
+    labHandle?.setVisible(true);
+  }
+
+  if (mode !== 'lab') {
+    requestAnimationFrame(() => {
+      resizeCanvas();
+      resizeVisuals();
+    });
+  }
+}
 
 // ─── Event callback: bridges audio events to visuals ─────────────
 
@@ -171,10 +264,12 @@ function onScoreEvent(event, time) {
 
 function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = window.innerWidth * dpr;
-  canvas.height = window.innerHeight * dpr;
-  canvas.style.width = window.innerWidth + 'px';
-  canvas.style.height = window.innerHeight + 'px';
+  const w = gardenStage?.clientWidth || window.innerWidth;
+  const h = gardenStage?.clientHeight || window.innerHeight;
+  canvas.width = Math.max(1, Math.round(w * dpr));
+  canvas.height = Math.max(1, Math.round(h * dpr));
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
@@ -214,6 +309,7 @@ export function getScore() {
 export function rebuildAndPlay() {
   currentScore = buildScore(currentParams);
   updateScore(currentScore, currentParams.theme);
+  labHandle?.onScoreUpdated();
   playScore(currentScore, onScoreEvent);
   return currentScore;
 }

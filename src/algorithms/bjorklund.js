@@ -79,6 +79,55 @@ function distributeRecursive(left, right) {
 }
 
 /**
+ * Compute all intermediate group-merging steps of the Bjorklund algorithm
+ * for visualization in the Algorithm Lab.
+ *
+ * @param {number} pulses - Active hits (k)
+ * @param {number} steps - Total steps (n)
+ * @returns {{ steps: string[][][], pattern: boolean[] }}
+ */
+export function bjorklundSteps(pulses, steps) {
+  if (pulses < 0 || steps <= 0) {
+    throw new Error(`bjorklundSteps: invalid args (pulses=${pulses}, steps=${steps})`);
+  }
+  const k = Math.min(pulses, steps);
+  if (k === 0) {
+    const empty = Array.from({ length: steps }, () => ['.']);
+    return { steps: [empty], pattern: new Array(steps).fill(false) };
+  }
+  if (k === steps) {
+    const full = Array.from({ length: steps }, () => ['x']);
+    return { steps: [full], pattern: new Array(steps).fill(true) };
+  }
+
+  let left = Array.from({ length: k }, () => ['x']);
+  let right = Array.from({ length: steps - k }, () => ['.']);
+  const history = [[...left, ...right].map(g => [...g])];
+
+  while (right.length > 1) {
+    const newLeft = [];
+    const newRight = [];
+    const pairs = Math.min(left.length, right.length);
+
+    for (let i = 0; i < pairs; i++) {
+      newLeft.push([...left[i], ...right[i]]);
+    }
+    if (left.length > right.length) {
+      for (let i = pairs; i < left.length; i++) newRight.push(left[i]);
+    } else {
+      for (let i = pairs; i < right.length; i++) newRight.push(right[i]);
+    }
+
+    left = newLeft;
+    right = newRight;
+    history.push([...left, ...right].map(g => [...g]));
+  }
+
+  const pattern = left.concat(right).flat().map(ch => ch === 'x');
+  return { steps: history, pattern };
+}
+
+/**
  * Rotate a Euclidean pattern by `offset` steps.
  * This shifts where the "downbeat" falls in the cycle.
  * 

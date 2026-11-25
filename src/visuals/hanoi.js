@@ -77,7 +77,7 @@ function getPegX(peg) {
 /**
  * Draw the Hanoi visualization.
  */
-export function drawHanoi(ctx, state, theme, centerX, groundY, scale = 1) {
+export function drawHanoi(ctx, state, theme, centerX, groundY, scale = 1, highlightedDisc = null) {
   const pegHeight = 80 * scale;
   const discHeight = 10 * scale;
   const maxDiscWidth = 50 * scale;
@@ -109,6 +109,12 @@ export function drawHanoi(ctx, state, theme, centerX, groundY, scale = 1) {
       ctx.fillStyle = theme.hanoi.disc[colorIdx];
       ctx.globalAlpha = 0.8;
       ctx.fill();
+      if (highlightedDisc === disc) {
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1;
     }
   }
@@ -134,6 +140,11 @@ export function drawHanoi(ctx, state, theme, centerX, groundY, scale = 1) {
     ctx.shadowBlur = 12;
     ctx.globalAlpha = 0.9;
     ctx.fill();
+    if (highlightedDisc === disc) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+    }
     ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
   }
