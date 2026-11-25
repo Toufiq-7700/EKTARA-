@@ -239,3 +239,14 @@ Completed a full code review and fixed the following issues:
 
 ---
 
+## Prompt 7: README, GitHub, and Vercel
+
+### Prompt
+
+Write a README.md with: project title, one-paragraph pitch, a screenshot placeholder, how each of the four recursive algorithms works and how it maps to sound and visuals (a table), how to run locally (npm install, npm run dev), how to export audio, the project structure, the tech stack, and a "Prompt log" section explaining that /prompt-log contains every prompt and agent response. Make sure package.json has build and preview scripts, and that npm run build succeeds. Add a vercel.json only if needed. Save the prompt log.
+
+### Response
+
+Updated `README.md` with the project pitch, screenshot placeholder, four-algorithm math/music/visual mapping table, local run/test/build instructions, WAV & JSON audio export guide, full project directory structure, tech stack, Vercel deployment notes, and a Prompt Log section linking to `prompt-log/prompt-log.md`. Verified `package.json` includes `dev`, `build`, `preview`, and `test` scripts, confirmed no `vercel.json` is needed for Vite's default `dist` static output, and verified both `npm test` (44/44 passing) and `npm run build` succeed cleanly.
+
+---
