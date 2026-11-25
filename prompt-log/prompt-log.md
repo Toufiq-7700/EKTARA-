@@ -332,3 +332,14 @@ Built the interactive **Algorithm Lab** with dual/split views, live synchronized
 
 ---
 
+## Prompt 10: Default to Split View on Portal Entry
+
+### Prompt
+
+when enter the portal it will show the split view first,, fix this]
+
+### Response
+
+Updated `src/main.js` so clicking **Begin** immediately activates Split View (`setViewMode(window.innerWidth > 900 ? 'split' : 'garden')`), showing the Garden on the left and the Algorithm Lab on the right on wide screens (with the parameter drawer collapsed cleanly to `☰`), while falling back to Garden on narrow mobile screens (`<= 900px`) where Split is hidden. Verified `npm test` (52/52 passing) and `npm run build` succeed cleanly.
+
+---

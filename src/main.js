@@ -176,12 +176,13 @@ beginBtn.addEventListener('click', async () => {
     onHoverTarget: handleLinkedHover
   });
 
-  // View Switcher (Garden / Split / Lab)
+  // View Switcher (Garden / Split / Lab) — default to Split view on wide screens
   viewSwitcher.querySelectorAll('.view-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       setViewMode(btn.dataset.view);
     });
   });
+  setViewMode(window.innerWidth > 900 ? 'split' : 'garden');
 
   // Linked highlighting from Garden hover -> Lab
   canvasEl.addEventListener('mousemove', (e) => {
