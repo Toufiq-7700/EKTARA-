@@ -127,11 +127,18 @@ export async function exportScoreToWav(params, options = {}) {
     }, 200);
 
     renderedBuffer = await Tone.Offline(async ({ transport }) => {
+      const ambientType = mixSettings.ambientType ?? params.ambient ?? 'wind';
+      const rainIntensity = mixSettings.rainIntensity ?? params.rainIntensity ?? 0.35;
+      const thunderEnabled = mixSettings.thunderEnabled ?? params.thunderEnabled ?? true;
+
       const offlineGraph = await createAudioGraph({
         layerVolumes: mixSettings.layerVolumes,
         layerMuted: mixSettings.layerMuted,
         masterVolume: mixSettings.masterVolume ?? 0.8,
-        ambientType: mixSettings.ambientType ?? params.ambient ?? 'wind'
+        ambientType,
+        rainIntensity,
+        thunderEnabled,
+        seed
       });
 
       const targetDb = volumeToDb(mixSettings.masterVolume ?? 0.8, -6);
@@ -141,12 +148,14 @@ export async function exportScoreToWav(params, options = {}) {
       offlineGraph.masterVol.volume.setValueAtTime(targetDb, Math.max(0.5, totalRenderDuration - 1.5));
       offlineGraph.masterVol.volume.rampTo(-60, 1.5, Math.max(0.5, totalRenderDuration - 1.5));
 
-      const ambientType = mixSettings.ambientType ?? params.ambient ?? 'wind';
       const ambientMuted = !!mixSettings.layerMuted?.ambient;
 
-      if (ambientType !== 'none' && !ambientMuted) {
+      if (ambientType === 'wind' && !ambientMuted) {
         offlineGraph.ambientNoise.start(0);
         offlineGraph.ambientNoise.stop(Math.max(0.5, durationSeconds - 0.5));
+      }
+      if (!ambientMuted && rainIntensity > 0.001) {
+        offlineGraph.rainSynth.scheduleOffline(durationSeconds, rainIntensity);
       }
 
       const rootNote = params.rootNote || 60;

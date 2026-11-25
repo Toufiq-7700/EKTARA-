@@ -155,10 +155,11 @@ export function drawTree(ctx, branches, theme, activeEvents, time, windPhase, re
       swayY = Math.cos(windPhase * 0.7 + branch.index * 0.2) * swayAmount * 0.3;
     }
 
+    const dip = branch.dipOffset || 0;
     const x1 = branch.x1 + swayX * 0.5;
-    const y1 = branch.y1 + swayY * 0.5;
+    const y1 = branch.y1 + swayY * 0.5 + dip * 0.35;
     const x2 = branch.x2 + swayX;
-    const y2 = branch.y2 + swayY;
+    const y2 = branch.y2 + swayY + dip;
 
     // Branch width based on depth (thicker trunk, thinner tips)
     const maxWidth = 6;

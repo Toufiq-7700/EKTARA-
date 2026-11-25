@@ -29,6 +29,8 @@ let sleepTimerId = null;
 let sleepStopTimeoutId = null;
 let evolveEnabled = false;
 let currentAmbientType = 'wind';
+let currentRainIntensity = 0.35;
+let currentThunderEnabled = true;
 let masterVolumeNormalized = 0.8;
 let currentScore = null;
 let onEventCallback = null;
@@ -61,15 +63,28 @@ function notifyPlaybackState() {
 /**
  * Initialize the audio engine. Must be called after a user gesture.
  */
-export async function initAudio() {
+export async function initAudio(initialOptions = {}) {
   if (isInitialized) return;
+
+  if (typeof initialOptions.rainIntensity === 'number') {
+    currentRainIntensity = Math.max(0, Math.min(1, initialOptions.rainIntensity));
+  }
+  if (typeof initialOptions.thunderEnabled === 'boolean') {
+    currentThunderEnabled = initialOptions.thunderEnabled;
+  }
+  if (initialOptions.ambientType) {
+    currentAmbientType = initialOptions.ambientType;
+  }
 
   await Tone.start();
   graph = await createAudioGraph({
     layerVolumes,
     layerMuted,
     masterVolume: masterVolumeNormalized,
-    ambientType: currentAmbientType
+    ambientType: currentAmbientType,
+    rainIntensity: currentRainIntensity,
+    thunderEnabled: currentThunderEnabled,
+    seed: initialOptions.seed ?? 42
   });
 
   isInitialized = true;
@@ -101,10 +116,17 @@ export function playScore(score, onEvent, options = {}) {
     graph.masterVol.volume.rampTo(targetDb, 4);
   }
 
-  // Start ambient noise only when enabled and unmuted
+  // Start wind noise only when ambient === 'wind' and unmuted
   configureAmbientNoise(graph, currentAmbientType);
-  if (currentAmbientType !== 'none' && !layerMuted.ambient && graph.ambientNoise.state !== 'started') {
+  if (currentAmbientType === 'wind' && !layerMuted.ambient && graph.ambientNoise.state !== 'started') {
     graph.ambientNoise.start();
+  }
+
+  // Start layered rain soundscape if intensity > 0 and ambient is unmuted
+  if (!layerMuted.ambient && currentRainIntensity > 0.001) {
+    graph.rainSynth.setIntensity(currentRainIntensity, 0.8);
+  } else {
+    graph.rainSynth.setIntensity(0, 0.1);
   }
 
   // Start ambient pad chord anchored on the root note
@@ -175,6 +197,7 @@ export function pausePlayback() {
     if (graph?.ambientNoise?.state === 'started') {
       graph.ambientNoise.stop();
     }
+    graph?.rainSynth?.stop();
   } catch (_) { /* ignore */ }
   isPlaying = false;
   notifyPlaybackState();
@@ -185,8 +208,11 @@ export function pausePlayback() {
  */
 export function resumePlayback() {
   if (!isInitialized || !graph) return;
-  if (currentAmbientType !== 'none' && !layerMuted.ambient && graph.ambientNoise.state !== 'started') {
+  if (currentAmbientType === 'wind' && !layerMuted.ambient && graph.ambientNoise.state !== 'started') {
     graph.ambientNoise.start();
+  }
+  if (!layerMuted.ambient && currentRainIntensity > 0.001) {
+    graph.rainSynth.setIntensity(currentRainIntensity, 0.4);
   }
   if (!layerMuted.ambient && currentPadNotes.length > 0) {
     graph.ambientPad.triggerAttack(currentPadNotes, Tone.now(), 0.3);
@@ -214,6 +240,7 @@ export function stopPlayback(options = {}) {
     if (graph?.ambientNoise?.state === 'started') {
       graph.ambientNoise.stop();
     }
+    graph?.rainSynth?.stop();
   } catch (_) { /* ignore */ }
 
   isPlaying = false;
@@ -257,9 +284,13 @@ export function setLayerMute(layer, muted) {
     if (muted) {
       graph.ambientPad.releaseAll();
       if (graph.ambientNoise.state === 'started') graph.ambientNoise.stop();
+      graph.rainSynth.stop();
     } else if (isPlaying) {
-      if (currentAmbientType !== 'none' && graph.ambientNoise.state !== 'started') {
+      if (currentAmbientType === 'wind' && graph.ambientNoise.state !== 'started') {
         graph.ambientNoise.start();
+      }
+      if (currentRainIntensity > 0.001) {
+        graph.rainSynth.setIntensity(currentRainIntensity, 0.35);
       }
       if (currentPadNotes.length > 0) {
         graph.ambientPad.triggerAttack(currentPadNotes, Tone.now(), 0.3);
@@ -276,7 +307,9 @@ export function getAudioMixSettings() {
     masterVolume: masterVolumeNormalized,
     layerVolumes: { ...layerVolumes },
     layerMuted: { ...layerMuted },
-    ambientType: currentAmbientType
+    ambientType: currentAmbientType,
+    rainIntensity: currentRainIntensity,
+    thunderEnabled: currentThunderEnabled
   };
 }
 
@@ -322,7 +355,7 @@ export function setAmbientType(type) {
   currentAmbientType = type;
   if (!graph) return;
   try {
-    if (type === 'none') {
+    if (type !== 'wind') {
       if (graph.ambientNoise.state === 'started') {
         graph.ambientNoise.stop();
       }
@@ -333,6 +366,36 @@ export function setAmbientType(type) {
       }
     }
   } catch (_) { /* ignore */ }
+}
+
+/**
+ * Set rain intensity (0 = fully stop rain nodes, 1 = heavy downpour).
+ */
+export function setRainIntensity(intensity) {
+  currentRainIntensity = Math.max(0, Math.min(1, intensity));
+  if (!graph) return;
+  if (layerMuted.ambient || !isPlaying) {
+    if (currentRainIntensity <= 0.001) {
+      graph.rainSynth.setIntensity(0, 0.2);
+    }
+    return;
+  }
+  graph.rainSynth.setIntensity(currentRainIntensity, 0.35);
+}
+
+/**
+ * Enable or disable distant thunder during heavy rain.
+ */
+export function setThunderEnabled(enabled) {
+  currentThunderEnabled = !!enabled;
+  graph?.rainSynth?.setThunderEnabled(currentThunderEnabled);
+}
+
+/**
+ * Get live rain audio node status (useful for verification/debugging).
+ */
+export function getRainAudioState() {
+  return graph?.rainSynth?.getState() || null;
 }
 
 /**

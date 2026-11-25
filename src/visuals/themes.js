@@ -31,6 +31,11 @@ export const THEMES = {
       trail: 'rgba(255, 232, 160, 0.3)',
       polygon: 'rgba(255, 232, 160, 0.15)'
     },
+    rain: {
+      streak: '#b8cce8',
+      splash: '#d0e2f8',
+      glint: '#f4f8ff'
+    },
     stars: '#ffffff',
     mist: 'rgba(180, 160, 200, 0.03)',
     ground: '#1a1520',
@@ -62,6 +67,11 @@ export const THEMES = {
       glow: '#c0f0a0',
       trail: 'rgba(192, 240, 160, 0.3)',
       polygon: 'rgba(192, 240, 160, 0.15)'
+    },
+    rain: {
+      streak: '#a8d4c4',
+      splash: '#c6ece0',
+      glint: '#eefcf6'
     },
     stars: '#d0e8d0',
     mist: 'rgba(100, 160, 120, 0.03)',
@@ -95,6 +105,11 @@ export const THEMES = {
       trail: 'rgba(192, 216, 240, 0.3)',
       polygon: 'rgba(192, 216, 240, 0.15)'
     },
+    rain: {
+      streak: '#a6c6eb',
+      splash: '#cbe2fa',
+      glint: '#f0f8ff'
+    },
     stars: '#e0e8f0',
     mist: 'rgba(100, 130, 180, 0.03)',
     ground: '#0a1020',
@@ -126,6 +141,11 @@ export const THEMES = {
       glow: '#ffa060',
       trail: 'rgba(255, 160, 96, 0.3)',
       polygon: 'rgba(255, 160, 96, 0.15)'
+    },
+    rain: {
+      streak: '#c8a8a0',
+      splash: '#e6cab8',
+      glint: '#fff0e4'
     },
     stars: '#f0d0c0',
     mist: 'rgba(180, 100, 80, 0.03)',

@@ -14,6 +14,15 @@ import { createHanoiState, applyHanoiMove, updateHanoiAnimation, drawHanoi } fro
 import { createFireflyRing, triggerFirefly, updateFireflies, drawFireflies } from './fireflies.js';
 import { createStars, drawSky, drawStars, drawVignette, drawMist, drawGround } from './atmosphere.js';
 import { drawXRay } from './xray.js';
+import {
+  createRainState,
+  setRainCanopyTargets,
+  resizeRainState,
+  setRainIntensityTarget,
+  updateRain,
+  drawRainLayer,
+  drawRainEffects
+} from './rain.js';
 import { createPRNG } from '../algorithms/prng.js';
 
 // ─── State ────────────────────────────────────────────────────────
@@ -30,6 +39,7 @@ let hanoiState = null;
 let fireflyState = null;
 let stars = [];
 let particles = [];
+let rainState = null;
 let currentTheme = null;
 let currentScore = null;
 let activeEvents = [];
@@ -82,6 +92,14 @@ function buildVisualLayout(score, resetGrowth = false) {
   );
 
   particles = createFallingParticles(treeBranches, 25, rng);
+
+  if (!rainState) {
+    rainState = createRainState(w, h, groundY, score.params?.seed || 42);
+    setRainIntensityTarget(rainState, score.params?.rainIntensity ?? 0.35);
+  } else {
+    resizeRainState(rainState, w, h, groundY);
+  }
+  setRainCanopyTargets(rainState, treeBranches);
 
   const hanoiDepth = Math.min(depth, 6);
   hanoiState = createHanoiState(hanoiDepth);
@@ -202,6 +220,15 @@ export function setTheme(themeName) {
   currentTheme = getTheme(themeName);
 }
 
+/**
+ * Set target rain intensity (0 = off, 1 = downpour) smoothly.
+ */
+export function setVisualRainIntensity(intensity) {
+  if (rainState) {
+    setRainIntensityTarget(rainState, intensity);
+  }
+}
+
 // ─── Main Animation Loop ─────────────────────────────────────────
 
 function animate(now) {
@@ -221,6 +248,13 @@ function animate(now) {
   const audioTime = getAudioTimeFn ? getAudioTimeFn() : elapsedTime;
   updateActiveEvents(audioTime);
 
+  // Smooth wind value linked across rain slant and tree sway
+  const windValue = Math.sin(elapsedTime * 0.22) * 0.55 + Math.cos(elapsedTime * 0.11) * 0.25 + 0.15;
+  if (rainState) {
+    updateRain(rainState, motionDt, windValue, reducedMotion);
+  }
+  const rainIntensity = rainState ? rainState.currentIntensity : 0;
+
   // Smooth zoom & crossfade
   zoomLevel += (targetZoom - zoomLevel) * Math.min(1, rawDt * 4);
   sceneFade = Math.min(1, sceneFade + rawDt * 1.8);
@@ -238,11 +272,14 @@ function animate(now) {
     ctx.translate(-w / 2, -groundY * 0.85);
   }
 
-  // Layer 0: Sky and atmosphere
-  drawSky(ctx, currentTheme, w, h);
-  drawStars(ctx, stars, currentTheme, elapsedTime);
-  drawMist(ctx, currentTheme, w, h, elapsedTime);
+  // Layer 0: Sky and atmosphere (darkens smoothly under heavy rain)
+  drawSky(ctx, currentTheme, w, h, rainIntensity);
+  drawStars(ctx, stars, currentTheme, elapsedTime, rainIntensity);
+  drawMist(ctx, currentTheme, w, h, elapsedTime, groundY, rainIntensity);
   drawGround(ctx, currentTheme, w, h, groundY);
+
+  // Far rain layer (behind tree & pillars)
+  drawRainLayer(ctx, rainState, 0, currentTheme);
 
   ctx.save();
   ctx.globalAlpha = sceneFade;
@@ -253,13 +290,16 @@ function animate(now) {
     drawHanoi(ctx, hanoiState, currentTheme, treeX, groundY + 5, 0.8);
   }
 
+  // Mid rain layer (around tree)
+  drawRainLayer(ctx, rainState, 1, currentTheme);
+
   // Layer 2: The L-system tree (hero)
   if (treeBranches.length > 0) {
     const visibleBranches = treeBranches.slice(
       0,
       Math.max(1, Math.floor(treeBranches.length * growthProgress))
     );
-    const windPhase = elapsedTime * 0.5;
+    const windPhase = elapsedTime * 0.5 + windValue * 0.6;
     drawTree(ctx, visibleBranches, currentTheme, activeEvents, elapsedTime, windPhase, reducedMotion);
     updateAndDrawParticles(ctx, particles, currentTheme, elapsedTime, groundY);
   }
@@ -269,6 +309,10 @@ function animate(now) {
     updateFireflies(fireflyState, motionDt, elapsedTime);
     drawFireflies(ctx, fireflyState, currentTheme);
   }
+
+  // Near rain layer + ground splashes + canopy glints (foreground)
+  drawRainLayer(ctx, rainState, 2, currentTheme);
+  drawRainEffects(ctx, rainState, currentTheme);
 
   ctx.restore();
 

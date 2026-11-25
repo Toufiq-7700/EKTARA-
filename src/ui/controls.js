@@ -20,22 +20,26 @@ const PRESETS = {
   'Quiet Forest': {
     seed: 42, depth: 3, scale: 'pentatonic', rootNote: 60,
     tempo: 50, branchAngle: 25, densityEuclid: 0.7,
-    lsystemPreset: 'Fern', theme: 'Moss', ambient: 'wind'
+    lsystemPreset: 'Fern', theme: 'Moss', ambient: 'wind',
+    rainIntensity: 0.15, thunderEnabled: true
   },
   'Moonlit Pond': {
     seed: 137, depth: 5, scale: 'lydian', rootNote: 67,
     tempo: 45, branchAngle: 22, densityEuclid: 0.5,
-    lsystemPreset: 'Wispy Bush', theme: 'Moonlight', ambient: 'rain'
+    lsystemPreset: 'Wispy Bush', theme: 'Moonlight', ambient: 'rain',
+    rainIntensity: 0.55, thunderEnabled: true
   },
   'Deep Dream': {
     seed: 256, depth: 7, scale: 'dorian', rootNote: 55,
     tempo: 40, branchAngle: 30, densityEuclid: 1.5,
-    lsystemPreset: 'Canopy', theme: 'Dusk', ambient: 'wind'
+    lsystemPreset: 'Canopy', theme: 'Dusk', ambient: 'wind',
+    rainIntensity: 0.75, thunderEnabled: true
   },
   'Morning Light': {
     seed: 88, depth: 4, scale: 'pentatonic', rootNote: 72,
     tempo: 65, branchAngle: 20, densityEuclid: 1.0,
-    lsystemPreset: 'Binary Tree', theme: 'Ember', ambient: 'none'
+    lsystemPreset: 'Binary Tree', theme: 'Ember', ambient: 'none',
+    rainIntensity: 0, thunderEnabled: false
   }
 };
 
@@ -54,6 +58,7 @@ export function buildUI(container, callbacks) {
     pausePlayback, resumePlayback, stopPlayback,
     setMasterVolume, setLayerVolume, setLayerMute,
     setSleepTimer, setEvolve, setAmbientType,
+    setRainIntensityLevel, setThunderMode,
     setCurrentTheme, toggleXRay, setZoomLevel,
     exportWav, exportJson, setPlaybackStateListener
   } = callbacks;
@@ -184,6 +189,22 @@ export function buildUI(container, callbacks) {
             <option value="rain">Rain</option>
             <option value="none">None</option>
           </select>
+        </div>
+
+        <!-- Rain Intensity & Thunder -->
+        <div class="control-group" role="group" aria-label="Rain controls">
+          <label for="rain-intensity-slider">Rain Intensity</label>
+          <p class="control-hint">Links visual rainfall, canopy splashes, and layered rain sound (0 = off)</p>
+          <div class="slider-row">
+            <input type="range" id="rain-intensity-slider" min="0" max="1" step="0.01" value="0.35"
+                   aria-label="Rain intensity from 0 to 1" />
+            <span id="rain-intensity-val" class="slider-val">35%</span>
+          </div>
+          <label class="toggle-row" style="margin-top:6px;">
+            <input type="checkbox" id="thunder-toggle" checked aria-label="Soft distant thunder" />
+            <span>Distant Thunder</span>
+            <span class="control-hint inline">(heavy rain only)</span>
+          </label>
         </div>
 
         <!-- Layer Volumes -->
@@ -427,9 +448,40 @@ export function buildUI(container, callbacks) {
   });
 
   // Ambient
+  const rainSlider = container.querySelector('#rain-intensity-slider');
+  const rainValLabel = container.querySelector('#rain-intensity-val');
+  const thunderToggle = container.querySelector('#thunder-toggle');
+
+  function formatRainLabel(v) {
+    return v <= 0.005 ? 'Off' : `${Math.round(v * 100)}%`;
+  }
+
   container.querySelector('#ambient-select').addEventListener('change', (e) => {
-    setAmbientType(e.target.value);
-    setParams({ ambient: e.target.value });
+    const val = e.target.value;
+    setAmbientType(val);
+    setParams({ ambient: val });
+    if (val === 'rain' && parseFloat(rainSlider.value) <= 0.01) {
+      rainSlider.value = '0.45';
+      rainValLabel.textContent = formatRainLabel(0.45);
+      setRainIntensityLevel?.(0.45);
+    } else if (val === 'none') {
+      rainSlider.value = '0';
+      rainValLabel.textContent = formatRainLabel(0);
+      setRainIntensityLevel?.(0);
+    }
+    saveParamsToHash();
+  });
+
+  rainSlider.addEventListener('input', () => {
+    const val = parseFloat(rainSlider.value);
+    rainValLabel.textContent = formatRainLabel(val);
+    setRainIntensityLevel?.(val);
+  });
+  rainSlider.addEventListener('change', saveParamsToHash);
+
+  thunderToggle.addEventListener('change', (e) => {
+    setThunderMode?.(e.target.checked);
+    saveParamsToHash();
   });
 
   // Layer volumes
@@ -485,6 +537,8 @@ export function buildUI(container, callbacks) {
       updateControlsFromParams(preset);
       setCurrentTheme(preset.theme);
       setAmbientType(preset.ambient);
+      setRainIntensityLevel?.(preset.rainIntensity ?? 0);
+      setThunderMode?.(preset.thunderEnabled ?? true);
       applyAndRebuild();
     });
   });
@@ -621,6 +675,10 @@ export function buildUI(container, callbacks) {
     container.querySelector('#lsystem-select').value = params.lsystemPreset || 'Fern';
     container.querySelector('#theme-select').value = params.theme || 'Dusk';
     container.querySelector('#ambient-select').value = params.ambient || 'wind';
+    const rainVal = params.rainIntensity ?? 0.35;
+    rainSlider.value = rainVal;
+    rainValLabel.textContent = formatRainLabel(rainVal);
+    thunderToggle.checked = params.thunderEnabled ?? true;
   }
 
   // Initialize from current params

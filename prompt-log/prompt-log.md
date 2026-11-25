@@ -250,3 +250,46 @@ Write a README.md with: project title, one-paragraph pitch, a screenshot placeho
 Updated `README.md` with the project pitch, screenshot placeholder, four-algorithm math/music/visual mapping table, local run/test/build instructions, WAV & JSON audio export guide, full project directory structure, tech stack, Vercel deployment notes, and a Prompt Log section linking to `prompt-log/prompt-log.md`. Verified `package.json` includes `dev`, `build`, `preview`, and `test` scripts, confirmed no `vercel.json` is needed for Vite's default `dist` static output, and verified both `npm test` (44/44 passing) and `npm run build` succeed cleanly.
 
 ---
+## Prompt 8: Layered Rain Visuals & Procedural Audio Upgrade
+
+### Prompt
+
+Upgrade the rain so it looks and sounds like real rainfall, and link the two.
+
+VISUAL (Canvas 2D):
+- Replace any simple rain with a layered particle system: 3 depth layers (far, mid, near). Far drops are short, thin, faint, and slow; near drops are longer, brighter, faster, and slightly blurred. This creates real depth.
+- Drops fall at a slight angle that depends on the current wind value
+- Splashes: when a drop reaches the ground line, spawn a tiny ripple ring plus 2 to 3 micro-droplets that arc up and fade. Near-layer drops make larger splashes.
+- Drops that hit a branch or leaf make a small glint and the leaf dips slightly
+- Soft mist near the ground, and a subtle darkening of the sky when rain is heavy
+- Rain intensity slider (0 = off, 1 = downpour) changes drop count, speed, and sky darkness smoothly (no sudden jumps)
+- Cap total particles (e.g. 1500) and use object pooling so the framerate stays at 60fps
+
+SOUND (Tone.js, procedural, no audio files):
+- Build rain from layered filtered noise: a high-passed white noise for the hiss, a band-passed pink noise for the body, and a low-passed brown noise for distant rumble
+- Add random soft "droplet" ticks (very short filtered noise or sine blips with random pitch and pan) whose rate follows the visual drop rate
+- Intensity changes the filter cutoffs, volume, and droplet density together
+- Optional soft distant thunder at heavy intensity: a low rumble with a long fade, rare and gentle, never sudden
+- Stereo spread so the rain sounds wide, with the near layer panned slightly wider
+
+Keep the master limiter on. Make sure intensity 0 fully stops the rain nodes (no leftover hiss). Save the prompt log.
+
+### Response
+
+Upgraded the rain into a coupled audiovisual system across Canvas 2D and Tone.js:
+- **Layered Visual Particle Pool (`src/visuals/rain.js`, `src/visuals/renderer.js`, `src/visuals/atmosphere.js`, `src/visuals/tree.js`, `src/visuals/themes.js`)**:
+  - Pre-allocated fixed object pools strictly capped at **1500** total particles (`900` drops across `far`, `mid`, and `near` depth layers, `180` ground ripples, `360` arcing splash micro-droplets, `60` canopy glints).
+  - Far drops render behind the tree (`short, thin, faint, slow`), mid drops around the tree, and near drops in front with a soft streak blur (`long, bright, fast`) and larger ground splashes.
+  - Drop slant angle follows the live wind value shared with the tree's wind sway; canopy hits trigger a glint and spring-damped branch/leaf dip (`dipOffset`).
+  - Heavy rain smoothly darkens the sky, dims stars, and adds low-lying ground mist, with smooth intensity lerping (`0` to `1`).
+- **Procedural Stereo Rain Soundscape (`src/audio/rain.js`, `src/audio/graph.js`, `src/audio/engine.js`, `src/audio/export.js`)**:
+  - Built multi-band rain from high-passed white noise (hiss), band-passed pink noise (body), and low-passed brown noise (rumble) through a `StereoWidener` and panned channels, routed into the ambient channel → reverb → `-3 dB` master limiter.
+  - Added stochastic soft droplet ticks (short sine blips and micro-filtered noise bursts with wide near-layer panning) whose rate scales directly with the visual drop rate, plus optional rare gentle distant thunder above `0.65` intensity.
+  - Intensity `0` smoothly ramps gain to zero and stops all rain noise sources and schedulers (`hissNoise`, `bodyNoise`, `rumbleNoise`, `thunderNoise`), leaving zero leftover hiss.
+  - Integrated into both live playback and `Tone.Offline` WAV export.
+- **UI & Tests (`src/ui/controls.js`, `src/main.js`, `tests/rain.test.js`)**:
+  - Added the `Rain Intensity` slider (`0–1`, `Off` at `0`) and `Distant Thunder` toggle, wired into presets and URL hash / JSON state.
+  - Added 6 Vitest tests in `tests/rain.test.js` verifying the 1500 particle pool cap, 3 depth layers, smooth intensity transition to 0, ground splashes, wind/canopy interaction, and audio parameter scaling.
+
+---
+

@@ -9,11 +9,13 @@
 import { buildScore } from './algorithms/score.js';
 import { initAudio, playScore, pausePlayback, resumePlayback, stopPlayback, 
          setMasterVolume, setLayerVolume, setLayerMute, setSleepTimer,
-         setEvolve, setAmbientType, getPlaybackState, getCurrentTime,
+         setEvolve, setAmbientType, setRainIntensity as setAudioRainIntensity,
+         setThunderEnabled as setAudioThunderEnabled, getPlaybackState, getCurrentTime,
          getAudioMixSettings, setPlaybackStateListener } from './audio/engine.js';
 import { exportScoreToWav, exportParamsToJson, triggerBlobDownload } from './audio/export.js';
 import { initVisuals, startVisuals, stopVisuals, updateScore, resizeVisuals,
-         setXRay, setZoom, getZoom, onVisualEvent, setTheme } from './visuals/renderer.js';
+         setXRay, setZoom, getZoom, onVisualEvent, setTheme,
+         setVisualRainIntensity } from './visuals/renderer.js';
 import { buildUI } from './ui/controls.js';
 
 // ─── Default parameters (the state) ──────────────────────────────
@@ -28,7 +30,9 @@ export const defaultParams = {
   densityEuclid: 1.0,
   lsystemPreset: 'Fern',
   theme: 'Dusk',
-  ambient: 'wind'
+  ambient: 'wind',
+  rainIntensity: 0.35,
+  thunderEnabled: true
 };
 
 // Current mutable state
@@ -85,7 +89,12 @@ beginBtn.addEventListener('click', async () => {
   // Initialize audio (requires user gesture)
   let audioReady = false;
   try {
-    await initAudio();
+    await initAudio({
+      ambientType: currentParams.ambient,
+      rainIntensity: currentParams.rainIntensity,
+      thunderEnabled: currentParams.thunderEnabled,
+      seed: currentParams.seed
+    });
     audioReady = true;
   } catch (err) {
     console.error('Audio init failed:', err);
@@ -112,6 +121,7 @@ beginBtn.addEventListener('click', async () => {
   // Initialize and start visuals
   const canvasEl = document.getElementById('garden-canvas');
   initVisuals(canvasEl, currentScore, currentParams.theme, getCurrentTime);
+  setVisualRainIntensity(currentParams.rainIntensity);
   startVisuals();
 
   // Start playback with visual event callback
@@ -125,6 +135,7 @@ beginBtn.addEventListener('click', async () => {
     pausePlayback, resumePlayback, stopPlayback,
     setMasterVolume, setLayerVolume, setLayerMute,
     setSleepTimer, setEvolve: handleSetEvolve, setAmbientType,
+    setRainIntensityLevel, setThunderMode,
     setCurrentTheme, toggleXRay, setZoomLevel,
     exportWav, exportJson, setPlaybackStateListener
   });
@@ -218,6 +229,18 @@ export function toggleXRay(enabled) {
 
 export function setZoomLevel(level) {
   setZoom(level);
+}
+
+export function setRainIntensityLevel(intensity) {
+  const clamped = Math.max(0, Math.min(1, Number(intensity) || 0));
+  currentParams.rainIntensity = clamped;
+  setVisualRainIntensity(clamped);
+  setAudioRainIntensity(clamped);
+}
+
+export function setThunderMode(enabled) {
+  currentParams.thunderEnabled = !!enabled;
+  setAudioThunderEnabled(currentParams.thunderEnabled);
 }
 
 export function handleSetEvolve(enabled) {

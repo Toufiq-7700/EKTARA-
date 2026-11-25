@@ -7,6 +7,7 @@
  */
 
 import * as Tone from 'tone';
+import { createRainSynth } from './rain.js';
 
 export const DEFAULT_LAYER_VOLUMES = {
   melody: 0.7,
@@ -205,10 +206,17 @@ export async function createAudioGraph(options = {}) {
     }
   }).connect(ambientPadFilter);
 
-  // Ambient wind / rain noise
+  // Ambient wind noise (rain is handled separately by layered rainSynth)
   const ambientNoiseVol = new Tone.Volume(-26).connect(ambientCh);
   const ambientNoiseFilter = new Tone.Filter({ frequency: 340, type: 'lowpass' }).connect(ambientNoiseVol);
-  const ambientNoise = new Tone.Noise(ambientType === 'rain' ? 'pink' : 'brown').connect(ambientNoiseFilter);
+  const ambientNoise = new Tone.Noise('brown').connect(ambientNoiseFilter);
+
+  // Layered procedural rain soundscape (hiss + body + rumble + droplets + distant thunder)
+  const rainSynth = createRainSynth(ambientCh, {
+    seed: options.seed ?? 42,
+    initialIntensity: options.rainIntensity ?? 0,
+    thunderEnabled: options.thunderEnabled ?? true
+  });
 
   const graph = {
     masterVol,
@@ -233,7 +241,9 @@ export async function createAudioGraph(options = {}) {
     ambientNoise,
     ambientNoiseFilter,
     ambientNoiseVol,
+    rainSynth,
     dispose() {
+      rainSynth?.dispose();
       const nodes = [
         melodySynth, canonSynth, bassSynth,
         percChime, percBrush, percTap,
