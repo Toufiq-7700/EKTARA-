@@ -13,6 +13,7 @@ import { LSYSTEM_PRESETS } from '../algorithms/lsystem.js';
 import { SCALES } from '../algorithms/scales.js';
 import { THEMES } from '../visuals/themes.js';
 import { createPRNG } from '../algorithms/prng.js';
+import { TIMBRE_OPTIONS, DEFAULT_TIMBRES } from '../audio/instruments.js';
 
 // ─── Preset configurations ──────────────────────────────────────
 
@@ -58,7 +59,7 @@ export function buildUI(container, callbacks) {
     pausePlayback, resumePlayback, stopPlayback,
     setMasterVolume, setLayerVolume, setLayerMute,
     setSleepTimer, setEvolve, setAmbientType,
-    setRainIntensityLevel, setThunderMode,
+    setRainIntensityLevel, setThunderMode, setLayerTimbre,
     setCurrentTheme, toggleXRay, setZoomLevel,
     exportWav, exportJson, setPlaybackStateListener
   } = callbacks;
@@ -206,6 +207,28 @@ export function buildUI(container, callbacks) {
             <span class="control-hint inline">(heavy rain only)</span>
           </label>
         </div>
+
+        <!-- Sound Panel (Timbre selector per layer) -->
+        <details class="control-group sound-panel" open aria-label="Sound timbres">
+          <summary>Sound — Instrument Timbres</summary>
+          <p class="control-hint">Warm procedural timbres with vibrato & seeded humanisation</p>
+          ${[
+            ['melody', 'Melody (Nørgård)'],
+            ['canon', 'Canon'],
+            ['bass', 'Bass (Hanoi)'],
+            ['percussion', 'Percussion (Euclid)'],
+            ['ambient', 'Ambient Pad']
+          ].map(([layer, label]) => `
+            <div class="sound-row">
+              <label for="timbre-${layer}" class="sound-label">${label}</label>
+              <select id="timbre-${layer}" class="timbre-select" data-layer="${layer}" aria-label="${label} timbre">
+                ${TIMBRE_OPTIONS[layer].map(opt =>
+                  `<option value="${opt}"${opt === DEFAULT_TIMBRES[layer] ? ' selected' : ''}>${opt}</option>`
+                ).join('')}
+              </select>
+            </div>
+          `).join('')}
+        </details>
 
         <!-- Layer Volumes -->
         <details class="control-group layers-group">
@@ -487,6 +510,19 @@ export function buildUI(container, callbacks) {
     saveParamsToHash();
   });
 
+  // Sound panel timbre dropdowns
+  container.querySelectorAll('.timbre-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const layer = e.target.dataset.layer;
+      const val = e.target.value;
+      const curTimbres = { ...DEFAULT_TIMBRES, ...(getParams().timbres || {}) };
+      curTimbres[layer] = val;
+      setParams({ timbres: curTimbres });
+      setLayerTimbre?.(layer, val);
+      saveParamsToHash();
+    });
+  });
+
   // Layer volumes
   container.querySelectorAll('.layer-slider').forEach(slider => {
     slider.addEventListener('input', () => {
@@ -682,6 +718,10 @@ export function buildUI(container, callbacks) {
     rainSlider.value = rainVal;
     rainValLabel.textContent = formatRainLabel(rainVal);
     thunderToggle.checked = params.thunderEnabled ?? true;
+    const timbres = { ...DEFAULT_TIMBRES, ...(params.timbres || {}) };
+    container.querySelectorAll('.timbre-select').forEach(sel => {
+      sel.value = timbres[sel.dataset.layer] || DEFAULT_TIMBRES[sel.dataset.layer];
+    });
   }
 
   // Initialize from current params

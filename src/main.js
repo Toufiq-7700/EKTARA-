@@ -12,7 +12,8 @@ import { initAudio, playScore, pausePlayback, resumePlayback, stopPlayback,
          setEvolve, setAmbientType, setRainIntensity as setAudioRainIntensity,
          setThunderEnabled as setAudioThunderEnabled, getPlaybackState, getCurrentTime,
          getAudioMixSettings, setPlaybackStateListener,
-         setAlgorithmEnabled, setPlaybackSpeed, previewEvent } from './audio/engine.js';
+         setAlgorithmEnabled, setPlaybackSpeed, previewEvent, setLayerTimbre } from './audio/engine.js';
+import { DEFAULT_TIMBRES } from './audio/instruments.js';
 import { exportScoreToWav, exportParamsToJson, triggerBlobDownload } from './audio/export.js';
 import { initVisuals, startVisuals, stopVisuals, updateScore, resizeVisuals,
          setXRay, setZoom, getZoom, onVisualEvent, setTheme,
@@ -35,7 +36,8 @@ export const defaultParams = {
   theme: 'Dusk',
   ambient: 'wind',
   rainIntensity: 0.35,
-  thunderEnabled: true
+  thunderEnabled: true,
+  timbres: { ...DEFAULT_TIMBRES }
 };
 
 // Current mutable state
@@ -102,6 +104,7 @@ beginBtn.addEventListener('click', async () => {
       ambientType: currentParams.ambient,
       rainIntensity: currentParams.rainIntensity,
       thunderEnabled: currentParams.thunderEnabled,
+      timbres: currentParams.timbres,
       seed: currentParams.seed
     });
     audioReady = true;
@@ -148,7 +151,7 @@ beginBtn.addEventListener('click', async () => {
     pausePlayback, resumePlayback, stopPlayback,
     setMasterVolume, setLayerVolume, setLayerMute,
     setSleepTimer, setEvolve: handleSetEvolve, setAmbientType,
-    setRainIntensityLevel, setThunderMode,
+    setRainIntensityLevel, setThunderMode, setLayerTimbre,
     setCurrentTheme, toggleXRay, setZoomLevel,
     exportWav, exportJson, setPlaybackStateListener: (fn) => {
       setPlaybackStateListener((st) => {

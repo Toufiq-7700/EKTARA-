@@ -711,12 +711,35 @@ select option {
   min-width: 100px;
 }
 
-/* ─── Layer Volumes ───────────────────────────────────────── */
+/* ─── Sound Panel & Layer Volumes ─────────────────────────── */
 
+.sound-panel summary,
 .layers-group summary {
   cursor: pointer;
-  color: #a098b0;
+  color: #e8d5b5;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.sound-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.sound-label {
+  font-size: 0.78rem !important;
+  color: #b8b0cc !important;
+  margin-bottom: 0 !important;
+  min-width: 112px;
+}
+
+.timbre-select {
+  flex: 1;
   font-size: 0.8rem;
+  padding: 5px 8px;
 }
 
 .layer-row {

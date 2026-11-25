@@ -9,6 +9,7 @@
 import * as Tone from 'tone';
 import { buildScore } from '../algorithms/score.js';
 import { createPRNG } from '../algorithms/prng.js';
+import { humaniseEvent } from './instruments.js';
 import {
   createAudioGraph,
   triggerScoreEvent,
@@ -134,6 +135,7 @@ export async function exportScoreToWav(params, options = {}) {
       const offlineGraph = await createAudioGraph({
         layerVolumes: mixSettings.layerVolumes,
         layerMuted: mixSettings.layerMuted,
+        timbres: mixSettings.timbres || params.timbres,
         masterVolume: mixSettings.masterVolume ?? 0.8,
         ambientType,
         rainIntensity,
@@ -172,7 +174,9 @@ export async function exportScoreToWav(params, options = {}) {
       let cycleScore = initialScore;
 
       while (cycleStart < durationSeconds - 0.5) {
-        for (const event of cycleScore.events) {
+        const cycleRng = createPRNG((cycleParams.seed ?? 42) + 9091);
+        for (const rawEvent of cycleScore.events) {
+          const event = humaniseEvent(rawEvent, cycleRng);
           const eventTime = cycleStart + event.time;
           if (eventTime >= durationSeconds - 0.25) break;
 

@@ -7,6 +7,8 @@
  */
 
 import * as Tone from 'tone';
+import { createPRNG } from '../algorithms/prng.js';
+import { DEFAULT_TIMBRES, humaniseEvent } from './instruments.js';
 import {
   createAudioGraph,
   triggerScoreEvent,
@@ -39,6 +41,7 @@ let onPlaybackStateChange = null;
 let currentPadNotes = [];
 
 const layerVolumes = { ...DEFAULT_LAYER_VOLUMES };
+const layerTimbres = { ...DEFAULT_TIMBRES };
 const layerMuted = {
   melody: false,
   canon: false,
@@ -92,10 +95,15 @@ export async function initAudio(initialOptions = {}) {
     currentAmbientType = initialOptions.ambientType;
   }
 
+  if (initialOptions.timbres) {
+    Object.assign(layerTimbres, initialOptions.timbres);
+  }
+
   await Tone.start();
   graph = await createAudioGraph({
     layerVolumes,
     layerMuted,
+    timbres: layerTimbres,
     masterVolume: masterVolumeNormalized,
     ambientType: currentAmbientType,
     rainIntensity: currentRainIntensity,
@@ -158,8 +166,10 @@ export function playScore(score, onEvent, options = {}) {
   const transport = Tone.getTransport();
   transport.seconds = 0;
   scheduledEvents = [];
+  const humanRng = createPRNG((score.params?.seed ?? 42) + 9091);
 
-  for (const event of score.events) {
+  for (const rawEvent of score.events) {
+    const event = humaniseEvent(rawEvent, humanRng);
     const transportTime = START_OFFSET_SECONDS + event.time / playbackSpeed;
     const id = transport.schedule((time) => {
       const liveMuted = {
@@ -175,7 +185,7 @@ export function playScore(score, onEvent, options = {}) {
         console.warn('Audio event error:', err.message);
       }
       if (onEventCallback) {
-        onEventCallback(event, time);
+        onEventCallback(rawEvent, time);
       }
     }, transportTime);
 
@@ -330,10 +340,27 @@ export function getAudioMixSettings() {
     masterVolume: masterVolumeNormalized,
     layerVolumes: { ...layerVolumes },
     layerMuted: { ...layerMuted },
+    timbres: { ...layerTimbres },
     ambientType: currentAmbientType,
     rainIntensity: currentRainIntensity,
     thunderEnabled: currentThunderEnabled
   };
+}
+
+/**
+ * Smoothly change a layer's procedural timbre with no clicks.
+ */
+export function setLayerTimbre(layer, timbreName) {
+  layerTimbres[layer] = timbreName;
+  if (!graph) return;
+  graph.setLayerTimbre(layer, timbreName, layerVolumes[layer]);
+  if (layer === 'ambient' && isPlaying && !layerMuted.ambient && currentPadNotes.length > 0) {
+    setTimeout(() => {
+      if (isPlaying && !layerMuted.ambient && graph?.ambientPad) {
+        graph.ambientPad.triggerAttack(currentPadNotes, Tone.now(), 0.3);
+      }
+    }, 110);
+  }
 }
 
 /**

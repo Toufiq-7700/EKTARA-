@@ -1,13 +1,20 @@
 /**
  * Shared Audio Graph Builder
  *
- * Creates the exact same Tone.js voices, channels, and effects chain for both
- * live playback (src/audio/engine.js) and offline WAV export (src/audio/export.js).
- * Keeping this in one module guarantees exported audio matches live playback.
+ * Creates the exact same Tone.js voices, timbres, vibrato, channels, and effects
+ * chain for both live playback (src/audio/engine.js) and offline WAV export
+ * (src/audio/export.js) so exported audio matches live playback.
  */
 
 import * as Tone from 'tone';
 import { createRainSynth } from './rain.js';
+import {
+  DEFAULT_TIMBRES,
+  createMelodyVoice,
+  createBassVoice,
+  createPadVoice,
+  createPercussionVoices
+} from './instruments.js';
 
 export const DEFAULT_LAYER_VOLUMES = {
   melody: 0.7,
@@ -29,9 +36,6 @@ export const EXPORT_TAIL_SECONDS = 6;
 
 /**
  * Convert normalized volume [0, 1] plus base channel trim (dB) into target dB.
- * @param {number} normalized - Volume in [0, 1]
- * @param {number} baseDb - Base channel trim in dB
- * @returns {number} Volume in dB
  */
 export function volumeToDb(normalized, baseDb = 0) {
   const clamped = Math.max(0, Math.min(1, normalized));
@@ -40,19 +44,12 @@ export function volumeToDb(normalized, baseDb = 0) {
 }
 
 /**
- * Configure ambient noise filter and level for 'wind', 'rain', or 'none'.
- * @param {Object} graph - Audio graph returned by createAudioGraph
- * @param {string} ambientType - 'wind' | 'rain' | 'none'
+ * Configure ambient wind noise filter and level.
  */
 export function configureAmbientNoise(graph, ambientType) {
   if (!graph?.ambientNoise || !graph?.ambientNoiseFilter || !graph?.ambientNoiseVol) return;
 
-  if (ambientType === 'rain') {
-    graph.ambientNoise.type = 'pink';
-    graph.ambientNoiseFilter.frequency.value = 1100;
-    graph.ambientNoiseFilter.Q.value = 0.7;
-    graph.ambientNoiseVol.volume.value = -28;
-  } else if (ambientType === 'wind') {
+  if (ambientType === 'wind') {
     graph.ambientNoise.type = 'brown';
     graph.ambientNoiseFilter.frequency.value = 340;
     graph.ambientNoiseFilter.Q.value = 1.0;
@@ -61,15 +58,7 @@ export function configureAmbientNoise(graph, ambientType) {
 }
 
 /**
- * Build the complete Tone.js synth + effects graph on the active Tone context
- * (either the live AudioContext or a Tone.Offline OfflineContext).
- *
- * @param {Object} [options]
- * @param {Object} [options.layerVolumes] - Per-layer normalized volumes (0-1)
- * @param {Object} [options.layerMuted] - Per-layer mute flags
- * @param {number} [options.masterVolume] - Normalized master volume (0-1)
- * @param {string} [options.ambientType] - 'wind' | 'rain' | 'none'
- * @returns {Promise<Object>} Audio graph with synths, channels, effects, and dispose()
+ * Build the complete Tone.js synth + effects graph on the active Tone context.
  */
 export async function createAudioGraph(options = {}) {
   const layerVolumes = { ...DEFAULT_LAYER_VOLUMES, ...(options.layerVolumes || {}) };
@@ -81,13 +70,14 @@ export async function createAudioGraph(options = {}) {
     ambient: false,
     ...(options.layerMuted || {})
   };
+  const timbres = { ...DEFAULT_TIMBRES, ...(options.timbres || {}) };
   const masterVolume = options.masterVolume ?? 0.8;
   const ambientType = options.ambientType || 'wind';
 
-  // Master chain: reverb -> limiter -> master volume -> destination
+  // Master chain: reverb -> limiter (-3 dB) -> master volume -> destination
   const masterVol = new Tone.Volume(volumeToDb(masterVolume, -6)).toDestination();
   const limiter = new Tone.Limiter(-3).connect(masterVol);
-  const reverb = new Tone.Reverb({ decay: EXPORT_TAIL_SECONDS, wet: 0.4 }).connect(limiter);
+  const reverb = new Tone.Reverb({ decay: EXPORT_TAIL_SECONDS, wet: 0.42 }).connect(limiter);
   await reverb.ready;
   const delay = new Tone.FeedbackDelay({ delayTime: '8n.', feedback: 0.2, wet: 0.15 }).connect(reverb);
 
@@ -113,105 +103,25 @@ export async function createAudioGraph(options = {}) {
     mute: !!layerMuted.ambient
   }).connect(reverb);
 
-  // Melody synth: soft sine pluck-bell with slow attack
-  const melodySynth = new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 8,
-    voice: Tone.Synth,
-    options: {
-      oscillator: { type: 'sine' },
-      envelope: {
-        attack: 0.15,
-        decay: 0.6,
-        sustain: 0.3,
-        release: 1.5
-      },
-      volume: -6
-    }
-  }).connect(melodyCh);
+  // Subtle delayed vibrato for melody & canon notes
+  const melodyVibrato = new Tone.Vibrato({ frequency: 4.6, depth: 0.045, type: 'sine' }).connect(melodyCh);
+  const canonVibrato = new Tone.Vibrato({ frequency: 4.1, depth: 0.055, type: 'sine' }).connect(canonCh);
 
-  // Canon synth: softer triangle echo with longer release
-  const canonSynth = new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 8,
-    voice: Tone.Synth,
-    options: {
-      oscillator: { type: 'triangle' },
-      envelope: {
-        attack: 0.3,
-        decay: 0.8,
-        sustain: 0.2,
-        release: 2.5
-      },
-      volume: -12
-    }
-  }).connect(canonCh);
+  const resolveCanonTimbre = () =>
+    timbres.canon === 'Match Melody' ? timbres.melody : timbres.canon;
 
-  // Bass synth: warm low sine with soft filter envelope
-  const bassSynth = new Tone.MonoSynth({
-    oscillator: { type: 'sine' },
-    envelope: {
-      attack: 0.2,
-      decay: 0.4,
-      sustain: 0.6,
-      release: 3.0
-    },
-    filterEnvelope: {
-      attack: 0.12,
-      decay: 0.3,
-      sustain: 0.5,
-      release: 2.0,
-      baseFrequency: 110,
-      octaves: 2
-    },
-    volume: -8
-  }).connect(bassCh);
+  let melodySynth = createMelodyVoice(timbres.melody, melodyVibrato, 0);
+  let canonSynth = createMelodyVoice(resolveCanonTimbre(), canonVibrato, -6);
+  let bassSynth = createBassVoice(timbres.bass, bassCh);
+  let percVoices = createPercussionVoices(timbres.percussion, percCh);
+  let ambientPad = createPadVoice(timbres.ambient, ambientCh);
 
-  // Percussion: soft chime, brushed pink noise, and gentle wood-like tap
-  const percChime = new Tone.MetalSynth({
-    frequency: 800,
-    envelope: { attack: 0.005, decay: 0.4, release: 0.3 },
-    harmonicity: 5.1,
-    modulationIndex: 12,
-    resonance: 1800,
-    octaves: 1,
-    volume: -24
-  }).connect(percCh);
-
-  const percBrush = new Tone.NoiseSynth({
-    noise: { type: 'pink' },
-    envelope: { attack: 0.008, decay: 0.15, sustain: 0, release: 0.1 },
-    volume: -20
-  }).connect(percCh);
-
-  const percTap = new Tone.MembraneSynth({
-    pitchDecay: 0.015,
-    octaves: 2,
-    envelope: { attack: 0.004, decay: 0.2, sustain: 0, release: 0.1 },
-    volume: -22
-  }).connect(percCh);
-
-  // Ambient pad: warm detuned harmonics through low-pass filter
-  const ambientPadFilter = new Tone.Filter({ frequency: 900, type: 'lowpass' }).connect(ambientCh);
-  const ambientPad = new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 4,
-    voice: Tone.Synth,
-    options: {
-      oscillator: { type: 'sine4' },
-      envelope: {
-        attack: 4,
-        decay: 2,
-        sustain: 0.8,
-        release: 5
-      },
-      volume: -18
-    }
-  }).connect(ambientPadFilter);
-
-  // Ambient wind noise (rain is handled separately by layered rainSynth)
+  // Ambient wind noise
   const ambientNoiseVol = new Tone.Volume(-26).connect(ambientCh);
   const ambientNoiseFilter = new Tone.Filter({ frequency: 340, type: 'lowpass' }).connect(ambientNoiseVol);
   const ambientNoise = new Tone.Noise('brown').connect(ambientNoiseFilter);
 
-  // Layered procedural rain soundscape (hiss + body + rumble + droplets + distant thunder)
+  // Layered procedural rain soundscape
   const rainSynth = createRainSynth(ambientCh, {
     seed: options.seed ?? 42,
     initialIntensity: options.rainIntensity ?? 0,
@@ -223,6 +133,7 @@ export async function createAudioGraph(options = {}) {
     limiter,
     reverb,
     delay,
+    timbres,
     channels: {
       melody: melodyCh,
       canon: canonCh,
@@ -230,34 +141,80 @@ export async function createAudioGraph(options = {}) {
       percussion: percCh,
       ambient: ambientCh
     },
-    melodySynth,
-    canonSynth,
-    bassSynth,
-    percChime,
-    percBrush,
-    percTap,
-    ambientPad,
-    ambientPadFilter,
+    melodyVibrato,
+    canonVibrato,
+    get melodySynth() { return melodySynth; },
+    get canonSynth() { return canonSynth; },
+    get bassSynth() { return bassSynth; },
+    get percVoices() { return percVoices; },
+    get ambientPad() { return ambientPad; },
     ambientNoise,
     ambientNoiseFilter,
     ambientNoiseVol,
     rainSynth,
+
+    /**
+     * Smoothly swap a layer's timbre with a brief gain dip so no clicks occur.
+     */
+    setLayerTimbre(layer, newTimbre, normalizedVol) {
+      timbres[layer] = newTimbre;
+      const ch = this.channels[layer];
+      if (!ch) return;
+
+      const baseMix = DEFAULT_LAYER_MIX_DB[layer] ?? -6;
+      if (typeof normalizedVol === 'number') layerVolumes[layer] = normalizedVol;
+      const curVol = layerVolumes[layer] ?? 0.6;
+      const targetDb = volumeToDb(curVol, baseMix);
+
+      // Brief fade down, swap, fade back in smoothly
+      ch.volume.rampTo(-60, 0.08);
+      setTimeout(() => {
+        try {
+          if (layer === 'melody') {
+            melodySynth?.releaseAll();
+            melodySynth?.dispose();
+            melodySynth = createMelodyVoice(newTimbre, melodyVibrato, 0);
+            if (timbres.canon === 'Match Melody') {
+              canonSynth?.releaseAll();
+              canonSynth?.dispose();
+              canonSynth = createMelodyVoice(newTimbre, canonVibrato, -6);
+            }
+          } else if (layer === 'canon') {
+            canonSynth?.releaseAll();
+            canonSynth?.dispose();
+            canonSynth = createMelodyVoice(resolveCanonTimbre(), canonVibrato, -6);
+          } else if (layer === 'bass') {
+            bassSynth?.releaseAll();
+            bassSynth?.dispose();
+            bassSynth = createBassVoice(newTimbre, bassCh);
+          } else if (layer === 'percussion') {
+            percVoices?.dispose();
+            percVoices = createPercussionVoices(newTimbre, percCh);
+          } else if (layer === 'ambient') {
+            ambientPad?.releaseAll();
+            ambientPad?.dispose();
+            ambientPad = createPadVoice(newTimbre, ambientCh);
+          }
+        } catch (_) { /* ignore swap edge case */ }
+        ch.volume.rampTo(targetDb, 0.25);
+      }, 90);
+    },
+
     dispose() {
       rainSynth?.dispose();
+      try { melodySynth?.dispose(); } catch (_) { /* ignore */ }
+      try { canonSynth?.dispose(); } catch (_) { /* ignore */ }
+      try { bassSynth?.dispose(); } catch (_) { /* ignore */ }
+      try { percVoices?.dispose(); } catch (_) { /* ignore */ }
+      try { ambientPad?.dispose(); } catch (_) { /* ignore */ }
       const nodes = [
-        melodySynth, canonSynth, bassSynth,
-        percChime, percBrush, percTap,
-        ambientPad, ambientPadFilter,
+        melodyVibrato, canonVibrato,
         ambientNoise, ambientNoiseFilter, ambientNoiseVol,
         melodyCh, canonCh, bassCh, percCh, ambientCh,
         delay, reverb, limiter, masterVol
       ];
       for (const node of nodes) {
-        try {
-          node?.dispose();
-        } catch (_) {
-          /* ignore dispose errors */
-        }
+        try { node?.dispose(); } catch (_) { /* ignore */ }
       }
     }
   };
@@ -267,44 +224,47 @@ export async function createAudioGraph(options = {}) {
 }
 
 /**
- * Trigger a single score event on the provided audio graph.
- *
- * @param {Object} graph - Audio graph from createAudioGraph()
- * @param {Object} event - Timed event from buildScore()
- * @param {number} time - Web Audio scheduled time
- * @param {Object} [layerMuted] - Optional mute map
+ * Trigger a single (humanised) score event on the provided audio graph.
  */
 export function triggerScoreEvent(graph, event, time, layerMuted = {}) {
-  const { voice, note, duration, velocity } = event;
+  const { voice, note, frequency, duration, velocity } = event;
   if (layerMuted[voice]) return;
 
   const safeVel = Math.max(0.01, Math.min(1, velocity ?? 0.5));
-  const safeDur = Math.max(0.05, duration ?? 0.2);
+  const safeDur = Math.max(0.06, duration ?? 0.25);
+  const pitchArg = frequency > 0 ? frequency : note;
 
   switch (voice) {
     case 'melody':
-      if (note) {
-        graph.melodySynth.triggerAttackRelease(note, safeDur, time, safeVel);
+      if (pitchArg) {
+        // Delayed vibrato blooms gently after attack
+        graph.melodyVibrato.depth.setValueAtTime(0, time);
+        graph.melodyVibrato.depth.linearRampToValueAtTime(0.045, time + 0.28);
+        graph.melodySynth.triggerAttackRelease(pitchArg, safeDur, time, safeVel);
       }
       break;
     case 'canon':
-      if (note) {
-        graph.canonSynth.triggerAttackRelease(note, safeDur, time, safeVel);
+      if (pitchArg) {
+        graph.canonVibrato.depth.setValueAtTime(0, time);
+        graph.canonVibrato.depth.linearRampToValueAtTime(0.055, time + 0.35);
+        graph.canonSynth.triggerAttackRelease(pitchArg, safeDur, time, safeVel);
       }
       break;
     case 'bass':
-      if (note) {
-        graph.bassSynth.triggerAttackRelease(note, safeDur, time, safeVel);
+      if (pitchArg) {
+        graph.bassSynth.triggerAttackRelease(pitchArg, safeDur, time, safeVel);
       }
       break;
     case 'percussion': {
       const percType = event.meta?.percType || 'brush';
+      const pv = graph.percVoices;
+      if (!pv) break;
       if (percType === 'chime') {
-        graph.percChime.triggerAttackRelease('16n', time, safeVel);
+        pv.percChime.triggerAttackRelease('16n', time, safeVel * 0.85);
       } else if (percType === 'tap') {
-        graph.percTap.triggerAttackRelease('C2', '16n', time, safeVel);
+        pv.percTap.triggerAttackRelease(pv.isBamboo ? 'G2' : 'D2', '16n', time, safeVel * 0.9);
       } else {
-        graph.percBrush.triggerAttackRelease('32n', time, safeVel);
+        pv.percBrush.triggerAttackRelease('32n', time, safeVel * 0.85);
       }
       break;
     }

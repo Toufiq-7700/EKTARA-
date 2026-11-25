@@ -343,3 +343,42 @@ when enter the portal it will show the split view first,, fix this]
 Updated `src/main.js` so clicking **Begin** immediately activates Split View (`setViewMode(window.innerWidth > 900 ? 'split' : 'garden')`), showing the Garden on the left and the Algorithm Lab on the right on wide screens (with the parameter drawer collapsed cleanly to `☰`), while falling back to Garden on narrow mobile screens (`<= 900px`) where Split is hidden. Verified `npm test` (52/52 passing) and `npm run build` succeed cleanly.
 
 ---
+## Prompt 11: Warm Organic Sound Design & Sound Panel
+
+### Prompt
+
+Upgrade the sound design so the instruments sound warm, natural, and relaxing, not like raw synthesizer tones. Keep everything procedural in Tone.js (no audio files needed), and keep it deterministic and exportable via Tone.Offline.
+
+MELODY (Norgard), offer 4 selectable timbres:
+- "Glass Bell": FM synthesis (Tone.FMSynth) with a low modulation index, a soft attack, a long exponential decay, and slight inharmonicity for a real bell shimmer
+- "Music Box": bright sine + a quiet octave-up partial, very short attack, medium decay
+- "Kalimba": Tone.PluckSynth or a short triangle with a quick filter envelope
+- "Singing Bowl": a few detuned sine partials (1x, 2.76x, 5.4x) with a very slow decay and gentle beating
+Add subtle vibrato that fades in after the note starts, and a tiny random pitch drift (a few cents) so notes feel alive.
+
+BASS (Hanoi): a warm sine + triangle blend with a gentle low-pass, soft attack (30 to 80 ms), long release, and light saturation (Tone.Chebyshev or a soft waveshaper) so it is audible on small speakers without being boomy.
+
+PAD (ambient): 3 to 4 detuned oscillators per note through a slow low-pass filter LFO, then a chorus (Tone.Chorus) and a long release, so chords bloom slowly.
+
+PERCUSSION (Euclidean): replace any harsh clicks with soft brushed noise (band-passed noise with a fast envelope), a muted wooden tap, and a filtered chime. All at low velocity with humanised timing.
+
+HUMANISATION: apply small random variations (seeded) to timing (+/- 10 to 25 ms), velocity (+/- 10%), and note length, so nothing sounds mechanical.
+
+Add a "Sound" panel with a timbre dropdown per layer. Make sure every layer fades in and out with no clicks (never start or stop a note abruptly). Save the prompt log.
+
+### Response
+
+Upgraded every musical layer in `src/audio/instruments.js`, `src/audio/graph.js`, `src/audio/engine.js`, and `src/audio/export.js`, and added the **Sound — Instrument Timbres** panel in `src/ui/controls.js`:
+- **Melody (`Glass Bell`, `Music Box`, `Kalimba`, `Singing Bowl`)**:
+  - `Glass Bell`: `Tone.FMSynth` (`harmonicity: 2.01`, `modulationIndex: 1.8`, soft `25ms` attack, `1.8s` decay, `2.8s` release).
+  - `Music Box`: `partials: [1, 0.28, 0.05]` (`8ms` soft attack, `0.85s` decay).
+  - `Kalimba`: `Tone.MonoSynth` triangle with quick low-pass filter sweep (`12ms` attack, `0.34s` decay).
+  - `Singing Bowl`: 4-slot polyphonic 3-partial cluster (`1x`, `2.76x + 1.8 Hz`, `5.4x - 2.4 Hz`) with slow `0.22s` attack, `3.4s` decay, and gentle beating.
+  - Added per-note delayed vibrato (`Tone.Vibrato`, depth ramping `0 → 0.045` after attack) and seeded `±7` cents pitch drift.
+- **Bass (Hanoi)**: Dual sine + triangle `MonoSynth` blend (`35–75ms` attack, `2.8s` release) through a gentle low-pass filter (`260–440 Hz`) and `Tone.Chebyshev` (`order: 2`) light saturation, with `Warm Blend`, `Deep Sub`, and `Mellow Pluck` options.
+- **Ambient Pad**: 4-oscillator detuned `fatsine`/`fattriangle` synth (`4.5s` attack, `6.0s` release) through a slow low-pass filter `LFO` and stereo `Tone.Chorus`, with `Blooming Pad`, `Warm Strings`, and `Celestial Drone` options.
+- **Percussion (Euclidean)**: Band-passed pink noise brush (`16ms` attack), low-passed wooden tap (`8ms` attack), and low-passed soft chime (`12ms` attack), with `Brush & Wood`, `Water Chimes`, and `Soft Bamboo` options.
+- **Deterministic Humanisation & Click-Free Swaps**: `humaniseEvent(event, rng)` adds seeded `±10–25ms` timing jitter, `±10%` velocity variation, `±12%` duration variation, and `±7` cents pitch drift across both live playback and `Tone.Offline` WAV export. Timbre switches ramp channel gain smoothly down and back up (`90ms` crossfade).
+
+---
+
