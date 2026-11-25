@@ -9,7 +9,9 @@
 import { buildScore } from './algorithms/score.js';
 import { initAudio, playScore, pausePlayback, resumePlayback, stopPlayback, 
          setMasterVolume, setLayerVolume, setLayerMute, setSleepTimer,
-         setEvolve, setAmbientType, getPlaybackState } from './audio/engine.js';
+         setEvolve, setAmbientType, getPlaybackState, getCurrentTime } from './audio/engine.js';
+import { initVisuals, startVisuals, stopVisuals, updateScore, 
+         setXRay, setZoom, onVisualEvent, setTheme } from './visuals/renderer.js';
 
 // ─── Default parameters (the state) ──────────────────────────────
 
@@ -70,10 +72,14 @@ beginBtn.addEventListener('click', async () => {
     // Show a message but continue with visuals
   }
 
+  // Initialize and start visuals
+  const canvasEl = document.getElementById('garden-canvas');
+  initVisuals(canvasEl, currentScore, currentParams.theme, getCurrentTime);
+  startVisuals();
+
   // Start playback with visual event callback
   playScore(currentScore, onScoreEvent);
 
-  // TODO: Start visuals (Prompt 3)
   // TODO: Initialize UI controls (Prompt 4)
 
   console.log('🌳 Recursive Garden started');
@@ -82,8 +88,9 @@ beginBtn.addEventListener('click', async () => {
 // ─── Event callback: bridges audio events to visuals ─────────────
 
 function onScoreEvent(event, time) {
-  // Will be used by the visual renderer to sync animations
-  // e.g., flash a branch when a melody note plays
+  // Bridge audio events to visuals
+  onVisualEvent(event);
+  
   if (event.voice === '_loop') {
     // Evolve: rebuild with new params
     currentParams = { ...currentParams, ...event.meta.newParams };
@@ -139,12 +146,27 @@ export function getScore() {
 
 export function rebuildAndPlay() {
   currentScore = buildScore(currentParams);
+  updateScore(currentScore, currentParams.theme);
   playScore(currentScore, onScoreEvent);
   return currentScore;
+}
+
+export function setCurrentTheme(themeName) {
+  currentParams.theme = themeName;
+  setTheme(themeName);
+}
+
+export function toggleXRay(enabled) {
+  setXRay(enabled);
+}
+
+export function setZoomLevel(level) {
+  setZoom(level);
 }
 
 export { 
   pausePlayback, resumePlayback, stopPlayback, 
   setMasterVolume, setLayerVolume, setLayerMute, 
-  setSleepTimer, setEvolve, setAmbientType, getPlaybackState 
+  setSleepTimer, setEvolve, setAmbientType, getPlaybackState,
+  startVisuals, stopVisuals
 };
