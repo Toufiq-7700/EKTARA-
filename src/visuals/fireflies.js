@@ -13,7 +13,7 @@
  * @param {number} radius - Ring radius
  * @returns {Object} Firefly ring state
  */
-export function createFireflyRing(pattern, centerX, centerY, radius) {
+export function createFireflyRing(pattern, centerX, centerY, radius, rng = () => 0.5) {
   const fireflies = pattern.map((isHit, i) => {
     const angle = (i / pattern.length) * Math.PI * 2 - Math.PI / 2;
     return {
@@ -22,7 +22,7 @@ export function createFireflyRing(pattern, centerX, centerY, radius) {
       brightness: 0,       // current glow intensity (0-1)
       baseX: centerX + Math.cos(angle) * radius,
       baseY: centerY + Math.sin(angle) * radius,
-      wobble: Math.random() * Math.PI * 2
+      wobble: rng() * Math.PI * 2
     };
   });
 

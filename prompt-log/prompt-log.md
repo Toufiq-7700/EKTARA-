@@ -207,3 +207,35 @@ Implemented deterministic offline WAV & parameter JSON export sharing the exact 
 
 ---
 
+## Prompt 6: Polish and Bug Sweep
+
+### Prompt
+
+Review the whole app for quality and fix issues:
+- Remove any harsh sounds, clicks, or sudden volume jumps; check the limiter
+- Test depths 1 to 8 for performance and make sure nothing freezes
+- Check mobile layout (touch controls, panel behaviour)
+- Add loading and error states (e.g. audio blocked, export failure)
+- Make transitions between presets smooth (crossfade, no hard resets)
+- Clean up the code, add comments to each algorithm file explaining the maths and musical mapping
+Give me a list of what you found and fixed. Save the prompt log.
+
+### Response
+
+Completed a full code review and fixed the following issues:
+1. **Transport Clock & Audio-Visual Sync (`src/audio/engine.js`)**: `playScore` previously scheduled events against `Tone.now()` instead of Transport time `0`, causing drift after `stopPlayback()` and desyncing visuals. Reset `transport.seconds = 0`, scheduled at `0.15 + event.time`, and aligned `getCurrentTime()`.
+2. **Audio Smoothness & Mix Fixes (`src/audio/engine.js`, `src/audio/graph.js`)**: Fixed master volume slider overwrite on `playScore`, eliminated double volume attenuation across channels and note velocity, paused/resumed ambient pad and noise cleanly, added distinct filter tuning for `wind` vs `rain`, raised percussion attacks slightly (`4-8 ms`) to prevent clicks, and kept `-3 dB` limiter active.
+3. **Depth 1–8 Performance & Canon Mapping (`src/algorithms/lsystem.js`, `src/algorithms/score.js`, `src/visuals/tree.js`, `src/visuals/renderer.js`)**:
+   - Fixed exponential L-system blowup at high depth (especially `Binary Tree` `F -> FF+[+F-F-F]-[-F+F+F]`) by adding per-preset `maxGen`, a `12,000` command cap, and a `2,200` branch draw cap.
+   - Normalized `computeTreeBranches` bounding scale so the tree fits cleanly in the viewport at every depth `1–8`.
+   - Replaced `O(N)` per-frame full-score scan with an `O(1)` advancing `eventCursor`.
+   - Corrected canon layers in `score.js` to be faster, quieter octave-up copies capped below MIDI 91.
+4. **100% Seed Determinism (`src/visuals/tree.js`, `src/visuals/fireflies.js`, `src/ui/controls.js`)**: Removed remaining `Math.random()` calls in particles, fireflies, and random seed stepping in favor of `createPRNG`.
+5. **Mobile Layout, X-Ray Placement, Wheel Zoom & Error States (`src/styles.css`, `src/visuals/xray.js`, `src/main.js`, `index.html`)**:
+   - Fixed mobile `#panel-toggle` being positioned off-screen when open at `100vw`, and enlarged mobile touch targets (`44px`).
+   - Moved Recursion X-Ray overlay from top-right (under the control panel) to top-left.
+   - Added mouse-wheel zoom synced with the zoom slider, smooth visual crossfade (`sceneFade`) on preset/score changes, loading state on the Begin button, and an audio-blocked status banner with retry button.
+6. **Tests & Build**: Added depth `1–8` stress test in `tests/algorithms.test.js`; all 44 Vitest tests pass and `vite build` succeeds cleanly.
+
+---
+

@@ -12,8 +12,8 @@ import { initAudio, playScore, pausePlayback, resumePlayback, stopPlayback,
          setEvolve, setAmbientType, getPlaybackState, getCurrentTime,
          getAudioMixSettings, setPlaybackStateListener } from './audio/engine.js';
 import { exportScoreToWav, exportParamsToJson, triggerBlobDownload } from './audio/export.js';
-import { initVisuals, startVisuals, stopVisuals, updateScore, 
-         setXRay, setZoom, onVisualEvent, setTheme } from './visuals/renderer.js';
+import { initVisuals, startVisuals, stopVisuals, updateScore, resizeVisuals,
+         setXRay, setZoom, getZoom, onVisualEvent, setTheme } from './visuals/renderer.js';
 import { buildUI } from './ui/controls.js';
 
 // ─── Default parameters (the state) ──────────────────────────────
@@ -43,10 +43,55 @@ const beginBtn = document.getElementById('begin-btn');
 const welcomeScreen = document.getElementById('welcome-screen');
 const canvas = document.getElementById('garden-canvas');
 const uiOverlay = document.getElementById('ui-overlay');
+const statusBanner = document.getElementById('status-banner');
+const statusMessage = document.getElementById('status-message');
+const statusAction = document.getElementById('status-action');
+
+function showStatusBanner(message, withRetry = false) {
+  if (!statusBanner) return;
+  statusMessage.textContent = message;
+  statusAction.style.display = withRetry ? 'inline-block' : 'none';
+  statusBanner.style.display = 'flex';
+}
+
+function hideStatusBanner() {
+  if (statusBanner) statusBanner.style.display = 'none';
+}
+
+if (statusAction) {
+  statusAction.addEventListener('click', async () => {
+    try {
+      await initAudio();
+      hideStatusBanner();
+      if (currentScore) playScore(currentScore, onScoreEvent);
+    } catch (err) {
+      showStatusBanner('Audio is still blocked by your browser — check site sound permissions.', true);
+    }
+  });
+}
 
 // ─── Begin button: start the experience ──────────────────────────
 
 beginBtn.addEventListener('click', async () => {
+  beginBtn.disabled = true;
+  beginBtn.textContent = 'Preparing...';
+
+  // Load params from URL hash if present
+  loadParamsFromHash();
+
+  // Build the score
+  currentScore = buildScore(currentParams);
+
+  // Initialize audio (requires user gesture)
+  let audioReady = false;
+  try {
+    await initAudio();
+    audioReady = true;
+  } catch (err) {
+    console.error('Audio init failed:', err);
+    showStatusBanner('Audio was blocked by your browser. Visuals are running.', true);
+  }
+
   // Fade out welcome screen
   welcomeScreen.classList.add('fade-out');
   canvas.style.display = 'block';
@@ -54,27 +99,15 @@ beginBtn.addEventListener('click', async () => {
 
   // Resize canvas
   resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('resize', () => {
+    resizeCanvas();
+    resizeVisuals();
+  });
 
   // Remove welcome screen after transition
   setTimeout(() => {
     welcomeScreen.style.display = 'none';
   }, 1000);
-
-  // Load params from URL hash if present
-  loadParamsFromHash();
-
-  // Build the score
-  currentScore = buildScore(currentParams);
-  console.log(`🎵 Score built: ${currentScore.events.length} events, ${currentScore.duration.toFixed(1)}s`);
-
-  // Initialize audio (requires user gesture)
-  try {
-    await initAudio();
-  } catch (err) {
-    console.error('Audio init failed:', err);
-    // Show a message but continue with visuals
-  }
 
   // Initialize and start visuals
   const canvasEl = document.getElementById('garden-canvas');
@@ -82,7 +115,9 @@ beginBtn.addEventListener('click', async () => {
   startVisuals();
 
   // Start playback with visual event callback
-  playScore(currentScore, onScoreEvent);
+  if (audioReady) {
+    playScore(currentScore, onScoreEvent);
+  }
 
   // Initialize UI controls
   uiHandle = buildUI(uiOverlay, {
@@ -94,7 +129,13 @@ beginBtn.addEventListener('click', async () => {
     exportWav, exportJson, setPlaybackStateListener
   });
 
-  console.log('🌳 Recursive Garden started');
+  // Scroll wheel zooms into the recursive tree
+  canvasEl.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const nextZoom = Math.max(0.5, Math.min(4, getZoom() - e.deltaY * 0.001));
+    setZoom(nextZoom);
+    uiHandle?.updateZoomDisplay(nextZoom);
+  }, { passive: false });
 });
 
 // ─── Event callback: bridges audio events to visuals ─────────────
@@ -124,7 +165,7 @@ function resizeCanvas() {
   canvas.style.width = window.innerWidth + 'px';
   canvas.style.height = window.innerHeight + 'px';
   const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 // ─── URL hash parameter encoding ─────────────────────────────────

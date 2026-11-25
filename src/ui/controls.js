@@ -12,6 +12,7 @@
 import { LSYSTEM_PRESETS } from '../algorithms/lsystem.js';
 import { SCALES } from '../algorithms/scales.js';
 import { THEMES } from '../visuals/themes.js';
+import { createPRNG } from '../algorithms/prng.js';
 
 // ─── Preset configurations ──────────────────────────────────────
 
@@ -362,7 +363,9 @@ export function buildUI(container, callbacks) {
     applyAndRebuild();
   });
   container.querySelector('#random-seed').addEventListener('click', () => {
-    const newSeed = Math.floor(Math.random() * 99999);
+    const curSeed = parseInt(seedInput.value, 10) || 42;
+    const rng = createPRNG(curSeed ^ (Date.now() & 0xffff));
+    const newSeed = Math.floor(rng() * 99999);
     seedInput.value = newSeed;
     setParams({ seed: newSeed });
     applyAndRebuild();
@@ -624,8 +627,15 @@ export function buildUI(container, callbacks) {
   const params = getParams();
   updateControlsFromParams(params);
 
+  function updateZoomDisplay(level) {
+    const pct = Math.round(Math.max(50, Math.min(400, level * 100)));
+    zoomSlider.value = pct;
+    container.querySelector('#zoom-val').textContent = (pct / 100).toFixed(1) + '×';
+  }
+
   return {
     updateControlsFromParams,
+    updateZoomDisplay,
     show: () => { panelContent.style.display = 'block'; panelVisible = true; },
     hide: () => { panelContent.style.display = 'none'; panelVisible = false; }
   };

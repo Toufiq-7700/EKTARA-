@@ -54,6 +54,7 @@ export const LSYSTEM_PRESETS = {
       'F': 'FF'
     },
     angle: 25,
+    maxGen: 5,
     description: 'A delicate fractal fern with curving fronds'
   },
   'Binary Tree': {
@@ -62,6 +63,7 @@ export const LSYSTEM_PRESETS = {
       'F': 'FF+[+F-F-F]-[-F+F+F]'
     },
     angle: 22.5,
+    maxGen: 4,
     description: 'A symmetric branching tree'
   },
   'Wispy Bush': {
@@ -70,6 +72,7 @@ export const LSYSTEM_PRESETS = {
       'F': 'F[+F]F[-F][F]'
     },
     angle: 20,
+    maxGen: 5,
     description: 'A wispy, asymmetric bush with many small branches'
   },
   'Canopy': {
@@ -79,13 +82,16 @@ export const LSYSTEM_PRESETS = {
       'F': 'FF'
     },
     angle: 30,
+    maxGen: 5,
     description: 'A tall tree with a spreading canopy'
   }
 };
 
+const MAX_COMMANDS = 12000;
+
 /**
  * Parse an L-system string into turtle graphics instructions.
- * Returns an array of commands that the visual renderer will interpret.
+ * Caps output to MAX_COMMANDS so extreme depth presets stay smooth at 60fps.
  * 
  * @param {string} str - The L-system output string
  * @returns {{type: string, value?: number}[]} Array of drawing commands
@@ -93,6 +99,7 @@ export const LSYSTEM_PRESETS = {
 export function parseLSystemToCommands(str) {
   const commands = [];
   for (const ch of str) {
+    if (commands.length >= MAX_COMMANDS) break;
     switch (ch) {
       case 'F': commands.push({ type: 'forward' }); break;
       case 'f': commands.push({ type: 'forward_no_draw' }); break;

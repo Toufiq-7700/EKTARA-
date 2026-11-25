@@ -80,17 +80,20 @@ export function buildScore(params = {}) {
     });
   }
 
-  // Canon layers: each depth level adds a slower, quieter copy
+  // Canon layers: each depth level adds a faster, quieter, octave-up copy
+  // (capped at gentle upper register <= MIDI 91 so high depths stay relaxing)
   for (let canon = 1; canon < Math.min(depth, 4); canon++) {
-    const canonRate = Math.pow(2, canon);    // 2x, 4x, 8x slower
-    const canonOctave = -canon;              // each canon one octave lower
-    const canonVelocity = 0.3 / (canon + 1); // progressively quieter
-    const canonLen = Math.floor(melodyLength / canonRate);
+    const canonRate = Math.pow(2, canon);       // 2x, 4x, 8x faster
+    const canonVelocity = 0.22 / canon;         // progressively quieter
+    const stepTime = (beatDuration * 0.5) / canonRate;
+    const canonLen = Math.min(melodyLength, Math.floor((melodyLength * beatDuration * 0.5) / stepTime));
 
     for (let i = 0; i < canonLen; i++) {
-      const degree = norgardValues[i] + canonOctave * (SCALES[scale] || SCALES.pentatonic).length;
-      const midi = degreeToMidi(norgardValues[i], scale, rootNote - canon * 12);
-      const time = i * beatDuration * 0.5 * canonRate;
+      const value = norgardValues[i % norgardValues.length];
+      let midi = degreeToMidi(value, scale, rootNote + canon * 12);
+      // Keep canon notes softly below harsh high frequencies
+      while (midi > 91) midi -= 12;
+      const time = i * stepTime;
 
       events.push({
         time,
@@ -98,16 +101,16 @@ export function buildScore(params = {}) {
         note: midiToName(midi),
         frequency: midiToFreq(midi),
         midi,
-        duration: beatDuration * canonRate * 0.7,
+        duration: Math.max(0.18, beatDuration * 0.5 / canonRate),
         velocity: canonVelocity,
         pan: canon % 2 === 0 ? -0.4 : 0.4,
         meta: {
           algorithm: 'norgard',
           depth,
           index: i,
-          value: norgardValues[i],
+          value,
           canonLayer: canon,
-          label: `canon ${canon}: nørgård(${i}) = ${norgardValues[i]}`
+          label: `canon ${canon} (${canonRate}×): nørgård(${i}) = ${value}`
         }
       });
     }
@@ -194,7 +197,8 @@ export function buildScore(params = {}) {
 
   // ─── Layer 4: L-system → Visual Data ───────────────────────────
   const preset = LSYSTEM_PRESETS[lsystemPreset] || LSYSTEM_PRESETS['Fern'];
-  const lsystemDepth = Math.min(depth, 6); // cap generations for performance
+  // Cap generations per preset so exponential rules (e.g. Binary Tree) stay 60fps at depth 8
+  const lsystemDepth = Math.min(depth, preset.maxGen || 5);
   const lsystemStr = lsystem(preset.axiom, preset.rules, lsystemDepth);
   const lsystemCommands = parseLSystemToCommands(lsystemStr);
 

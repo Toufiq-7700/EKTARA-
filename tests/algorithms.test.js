@@ -219,6 +219,15 @@ describe('Score Builder', () => {
     const score = buildScore({ seed: 42, depth: 3 });
     expect(score.lsystemCommands.length).toBeGreaterThan(0);
   });
+
+  it('handles depths 1 through 8 safely without excessive L-system blowup', () => {
+    for (let depth = 1; depth <= 8; depth++) {
+      const score = buildScore({ seed: 42, depth, lsystemPreset: 'Binary Tree' });
+      expect(score.events.length).toBeGreaterThan(0);
+      expect(score.lsystemCommands.length).toBeLessThanOrEqual(12000);
+      expect(score.hanoiMoves.length).toBeLessThanOrEqual(63);
+    }
+  });
 });
 
 // ─── PRNG ─────────────────────────────────────────────────────────

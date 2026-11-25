@@ -12,32 +12,38 @@
  */
 
 /**
- * Compute the tree's branch structure from L-system commands.
- * Returns an array of branches, each with start/end positions, depth, and index.
- * 
+ * Compute the tree's branch structure from L-system commands,
+ * automatically fitting the tree height cleanly into `targetHeight`.
+ *
  * @param {Object[]} commands - L-system parsed commands
  * @param {number[]} branchAngles - Nørgård-derived angle offsets
  * @param {number} baseAngle - Base branch angle in degrees
  * @param {number} startX - Starting X position
  * @param {number} startY - Starting Y position
- * @param {number} length - Initial branch length
+ * @param {number} targetHeight - Desired visual tree height in pixels
  * @param {number} maxDepth - Current max depth to show (for growth animation)
- * @returns {Object[]} Array of branch objects
+ * @returns {Object[]} Array of branch objects (capped at 2200 for 60fps)
  */
-export function computeTreeBranches(commands, branchAngles, baseAngle, startX, startY, length, maxDepth = 999) {
-  const branches = [];
+export function computeTreeBranches(commands, branchAngles, baseAngle, startX, startY, targetHeight, maxDepth = 999) {
+  const MAX_BRANCHES = 2200;
+  const raw = [];
   const stack = [];
-  let x = startX;
-  let y = startY;
+  let x = 0;
+  let y = 0;
   let angle = -90; // Start pointing up (degrees)
   let depth = 0;
   let branchIndex = 0;
-  let currentLength = length;
+  let currentLength = 1;
   const lengthDecay = 0.72; // branches shrink per depth level
 
+  let minY = 0;
+  let maxY = 0;
+  let minX = 0;
+  let maxX = 0;
+
   for (const cmd of commands) {
+    if (raw.length >= MAX_BRANCHES) break;
     if (depth > maxDepth) {
-      // Skip commands beyond current animated depth
       if (cmd.type === 'push') {
         depth++;
         continue;
@@ -51,18 +57,23 @@ export function computeTreeBranches(commands, branchAngles, baseAngle, startX, s
 
     switch (cmd.type) {
       case 'forward': {
-        const rad = angle * Math.PI / 180;
+        const rad = (angle * Math.PI) / 180;
         const endX = x + Math.cos(rad) * currentLength;
         const endY = y + Math.sin(rad) * currentLength;
 
-        branches.push({
+        if (endY < minY) minY = endY;
+        if (endY > maxY) maxY = endY;
+        if (endX < minX) minX = endX;
+        if (endX > maxX) maxX = endX;
+
+        raw.push({
           x1: x, y1: y,
           x2: endX, y2: endY,
           depth,
           index: branchIndex,
           length: currentLength,
           angle,
-          isTip: false // updated later
+          isTip: false
         });
 
         x = endX;
@@ -72,13 +83,13 @@ export function computeTreeBranches(commands, branchAngles, baseAngle, startX, s
       }
 
       case 'right': {
-        const angleOffset = branchAngles[branchIndex % branchAngles.length] || baseAngle;
+        const angleOffset = branchAngles[branchIndex % (branchAngles.length || 1)] ?? baseAngle;
         angle += angleOffset;
         break;
       }
 
       case 'left': {
-        const angleOffset = branchAngles[branchIndex % branchAngles.length] || baseAngle;
+        const angleOffset = branchAngles[branchIndex % (branchAngles.length || 1)] ?? baseAngle;
         angle -= angleOffset;
         break;
       }
@@ -91,9 +102,8 @@ export function computeTreeBranches(commands, branchAngles, baseAngle, startX, s
 
       case 'pop':
         if (stack.length > 0) {
-          // Mark the last branch at this depth as a tip
-          if (branches.length > 0) {
-            branches[branches.length - 1].isTip = true;
+          if (raw.length > 0) {
+            raw[raw.length - 1].isTip = true;
           }
           const state = stack.pop();
           x = state.x;
@@ -106,15 +116,25 @@ export function computeTreeBranches(commands, branchAngles, baseAngle, startX, s
     }
   }
 
-  return branches;
+  // Normalize scale so tree fits comfortably in targetHeight regardless of depth
+  const spanY = Math.max(0.01, maxY - minY);
+  const scale = targetHeight / spanY;
+
+  return raw.map(b => ({
+    ...b,
+    x1: startX + b.x1 * scale,
+    y1: startY + b.y1 * scale,
+    x2: startX + b.x2 * scale,
+    y2: startY + b.y2 * scale,
+    length: b.length * scale
+  }));
 }
 
 /**
  * Draw the tree branches on canvas.
  */
 export function drawTree(ctx, branches, theme, activeEvents, time, windPhase, reducedMotion) {
-  const w = ctx.canvas.width / (window.devicePixelRatio || 1);
-  const h = ctx.canvas.height / (window.devicePixelRatio || 1);
+  if (!branches || branches.length === 0) return;
 
   // Build a set of active branch indices from melody events
   const activeBranches = new Set();
@@ -142,11 +162,10 @@ export function drawTree(ctx, branches, theme, activeEvents, time, windPhase, re
 
     // Branch width based on depth (thicker trunk, thinner tips)
     const maxWidth = 6;
-    const lineWidth = Math.max(0.5, maxWidth - branch.depth * 0.8);
+    const lineWidth = Math.max(0.6, maxWidth - branch.depth * 0.8);
 
-    // Base color
     const isActive = activeBranches.has(branch.index);
-    
+
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
@@ -154,12 +173,13 @@ export function drawTree(ctx, branches, theme, activeEvents, time, windPhase, re
     ctx.lineCap = 'round';
 
     if (isActive) {
-      // Glowing branch
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
       ctx.strokeStyle = theme.tree.glow;
       ctx.shadowColor = theme.tree.glow;
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 14;
       ctx.stroke();
-      ctx.shadowBlur = 0;
+      ctx.restore();
     } else {
       ctx.strokeStyle = branch.depth === 0 ? theme.tree.trunk : theme.tree.branch;
       ctx.stroke();
@@ -178,23 +198,26 @@ export function drawTree(ctx, branches, theme, activeEvents, time, windPhase, re
 }
 
 /**
- * Generate falling particles (leaves/petals).
+ * Generate falling particles (leaves/petals) deterministically using seeded PRNG.
  */
-export function createFallingParticles(branches, maxParticles = 30) {
+export function createFallingParticles(branches, maxParticles = 30, rng = () => 0.5) {
   const tips = branches.filter(b => b.isTip);
   const particles = [];
 
   for (let i = 0; i < Math.min(maxParticles, tips.length); i++) {
     const tip = tips[i % tips.length];
     particles.push({
+      originX: tip.x2,
+      originY: tip.y2,
       x: tip.x2,
       y: tip.y2,
-      vx: (Math.random() - 0.5) * 0.3,
-      vy: 0.2 + Math.random() * 0.3,
-      size: 1.5 + Math.random() * 1.5,
-      alpha: 0.4 + Math.random() * 0.3,
+      vx: (rng() - 0.5) * 0.3,
+      vy: 0.2 + rng() * 0.3,
+      size: 1.5 + rng() * 1.5,
+      baseAlpha: 0.4 + rng() * 0.3,
+      alpha: 0.4 + rng() * 0.3,
       type: i % 2 === 0 ? 'leaf' : 'petal',
-      wobblePhase: Math.random() * Math.PI * 2
+      wobblePhase: rng() * Math.PI * 2
     });
   }
   return particles;
@@ -206,10 +229,11 @@ export function updateAndDrawParticles(ctx, particles, theme, time, groundY) {
     p.y += p.vy;
     p.alpha -= 0.001;
 
-    // Reset when below ground or invisible
+    // Reset back to tip origin when below ground or faded out
     if (p.y > groundY || p.alpha <= 0) {
-      p.y = p.y - groundY; // wrap to top area
-      p.alpha = 0.4 + Math.random() * 0.3;
+      p.x = p.originX;
+      p.y = p.originY;
+      p.alpha = p.baseAlpha;
     }
 
     ctx.beginPath();

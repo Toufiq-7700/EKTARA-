@@ -33,10 +33,10 @@ export function drawXRay(ctx, activeEvents, theme, width, height) {
 
   if (labels.length === 0) return;
 
-  // Draw panel background (top-right)
-  const panelWidth = 280;
-  const panelHeight = padding * 2 + labels.length * lineHeight + 20;
-  const panelX = width - panelWidth - 20;
+  // Draw panel background (top-left so it never overlaps the right-side control panel)
+  const panelWidth = Math.min(290, Math.max(220, width - 40));
+  const panelHeight = padding * 2 + labels.length * lineHeight + 36;
+  const panelX = 20;
   const panelY = 20;
 
   ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';

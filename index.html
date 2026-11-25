@@ -28,6 +28,12 @@
   <!-- UI overlay container (hidden until Begin is clicked) -->
   <div id="ui-overlay" style="display:none;"></div>
 
+  <!-- Non-intrusive audio/status banner -->
+  <div id="status-banner" class="status-banner" role="alert" style="display:none;">
+    <span id="status-message"></span>
+    <button id="status-action" class="status-action" style="display:none;">Retry Audio</button>
+  </div>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
