@@ -69,3 +69,141 @@ recursive-garden/
 
 ---
 
+## Prompt 1: The Recursive Core
+
+### Prompt
+
+Implement the four recursive algorithms as pure, tested functions in src/algorithms/. No audio or drawing code.
+
+1. norgard(k): recursive, with memoization. Also norgardSequence(length).
+2. hanoi(n, from, to, via): recursive generator returning moves {disc, from, to, step}.
+3. bjorklund(pulses, steps): recursive Bjorklund algorithm returning a boolean pattern, plus a rotation parameter.
+4. lsystem(axiom, rules, generations): recursive rewriting returning the final string, with presets: "Fern", "Binary Tree", "Wispy Bush".
+
+Then src/algorithms/score.js: buildScore(params) combining them into one timeline. Params: seed, depth (1-8), scale ("pentatonic", "lydian", "dorian"), rootNote, tempo (40-90 BPM), branchAngle, densityEuclid.
+Mapping:
+- Norgard value -> scale degree (wrap octaves) -> melody notes
+- Hanoi peg -> root/fifth/octave; disc size -> note length and register
+- Bjorklund hits -> percussion events
+- Depth Dial: raising depth adds a faster, quieter, octave-up Norgard canon, one more Hanoi disc, and denser Euclidean hits
+Each event: {time, voice, note, duration, velocity, pan, meta} where meta holds the recursion info (algorithm, depth, index, value) for later visuals.
+
+Add a few unit tests (Vitest) checking known values: Norgard starts 0,1,-1,2,1,0,-2,3; Hanoi(3) gives 7 moves; Bjorklund(3,8) gives the tresillo. Run the tests and show me the output. Save the prompt log.
+
+### Response
+
+Implemented pure, commented recursive algorithms and the unified score builder in `src/algorithms/`:
+- `src/algorithms/prng.js`: Mulberry32 deterministic seeded PRNG (`createPRNG`).
+- `src/algorithms/norgard.js`: Memoized recursive `norgard(k)` and `norgardSequence(length)`.
+- `src/algorithms/hanoi.js`: Recursive `hanoi(n, from, to, via)` generator returning `{disc, from, to, step}` moves.
+- `src/algorithms/bjorklund.js`: Recursive `bjorklund(pulses, steps)` and `rotatePattern(pattern, offset)`.
+- `src/algorithms/lsystem.js`: Recursive `lsystem(axiom, rules, generations)` with presets (`Fern`, `Binary Tree`, `Wispy Bush`, `Canopy`) and turtle command parser.
+- `src/algorithms/scales.js`: Scale intervals (`pentatonic`, `lydian`, `dorian`), `degreeToMidi`, `midiToFreq`, `midiToName`, and `PEG_INTERVALS`.
+- `src/algorithms/score.js`: `buildScore(params)` combining all four algorithms into a sorted event timeline `{ events, duration, lsystemCommands, branchAngles, norgardValues, euclideanPattern, hanoiMoves, params }`.
+- `tests/algorithms.test.js`: 38 Vitest unit tests verifying all four algorithms, PRNG determinism, scale mapping, and score generation — all 38 passed.
+
+---
+
+## Prompt 2: Audio Engine
+
+### Prompt
+
+Build src/audio/engine.js with Tone.js, consuming the score.
+Voices:
+- Melody: soft sine/triangle pluck-bell with a slow attack
+- Canon layers: same timbre, quieter, with more reverb
+- Bass: warm low sine/triangle, long release
+- Percussion: very soft brushed noise ticks, filtered chimes, and wood-block-like taps with low velocity
+- Ambient: a slow evolving pad (detuned oscillators through a low-pass filter) plus optional soft rain or wind from filtered noise
+Effects: long convolution-style reverb, gentle stereo delay, master limiter, a slow 4-second fade-in on start, and a master volume.
+Requirements:
+- Audio starts only after the user clicks "Begin" (browser autoplay rules)
+- play, pause, stop, volume, and a sleep timer (fades out after 5/15/30 min)
+- Per-layer volume and mute (melody, canon, bass, percussion, ambient)
+- Loop the piece seamlessly, and regenerate gently after each cycle when "Evolve" is on (seed increments, depth drifts slightly)
+Provide a minimal test page to hear it. Save the prompt log.
+
+### Response
+
+Built `src/audio/engine.js` with Tone.js and wired it into `src/main.js` triggered by the Begin button:
+- Voices: `melodySynth` (sine pluck-bell), `canonSynth` (triangle echo), `bassSynth` (`MonoSynth` warm sine with filter envelope), `percChime`/`percBrush`/`percTap`, `ambientPad`, and filtered `ambientNoise` (wind/rain/none).
+- Effects chain: `FeedbackDelay` → `Reverb` (6s decay) → `Limiter` (-3 dB) → master `Volume` with 4s fade-in.
+- Controls: `playScore`, `pausePlayback`, `resumePlayback`, `stopPlayback`, `setMasterVolume`, `setLayerVolume`, `setLayerMute`, `setSleepTimer`, `setEvolve`, `setAmbientType`, and `getCurrentTime`.
+
+---
+
+## Prompt 3: The Recursive Visuals
+
+### Prompt
+
+Build the visualization in src/visuals/ using Canvas 2D at 60fps, driven by the same score and the audio clock (so visuals match the sound).
+
+LAYER 1, the L-system tree (hero):
+- Grows generation by generation from the trunk, branches animated outward
+- Branch angle offsets come from the Norgard values, so the tree shape IS the melody
+- When a melody note plays, its branch glows and fades slowly (soft bloom, additive blend)
+- Leaves/blossoms appear at tips at the final generation and drift down gently
+- Gentle wind sway using layered sine motion
+LAYER 2, Hanoi:
+- Three luminous pillars at the base; discs of light slide in smooth arcs between pegs exactly when the bass plays; ground ripples on each landing
+LAYER 3, Euclidean ring:
+- A circle of fireflies orbiting the tree; each Bjorklund hit flashes its firefly
+- A faint rotating polygon connecting the active hits
+LAYER 4, atmosphere:
+- Slow gradient sky, drifting stars, soft vignette, and light mist
+RECURSION X-RAY mode (toggle):
+- Overlay the active call: labels such as "norgard(11) = 2, depth 3", "hanoi: disc 2 A->C", "E(5,8)", and highlight the current call stack as a small nested diagram. This shows judges that the recursion is real.
+Also add a "Zoom into recursion" interaction: scrolling or a slider zooms the camera into the tree and reveals finer generations, tied to the Depth Dial.
+Performance: cap particles, use requestAnimationFrame, handle resize and devicePixelRatio. 4 colour themes: Dusk, Moss, Moonlight, Ember. Respect prefers-reduced-motion by slowing and softening everything. Save the prompt log.
+
+### Response
+
+Built the Canvas 2D visual renderer in `src/visuals/`:
+- `src/visuals/themes.js`: Dusk, Moss, Moonlight, and Ember calm color palettes.
+- `src/visuals/tree.js`: L-system turtle graphics branch computation with Nørgård angle offsets, branch glow on active melody events, tip blossoms, wind sway, and falling leaf/petal particles.
+- `src/visuals/hanoi.js`: Three luminous pillars, smooth disc arc glides, and ground landing ripples synced to bass events.
+- `src/visuals/fireflies.js`: Rotating Euclidean rhythm firefly ring with connecting active-hit polygon and per-step flashes.
+- `src/visuals/atmosphere.js`: Gradient sky, twinkling stars, mist layers, ground plane, and soft vignette.
+- `src/visuals/xray.js`: Recursion X-Ray overlay displaying live recursive call labels and call-stack depth bars.
+- `src/visuals/renderer.js`: 60fps `requestAnimationFrame` orchestrator synced to audio clock, zoom transform, and `prefers-reduced-motion` support.
+
+---
+
+## Prompt 4: UI, Controls, and Relaxation UX
+
+### Prompt
+
+Build the interface in src/ui/ around the visual (full-screen canvas, controls in a collapsible, translucent side panel that auto-hides when idle).
+Controls with short plain-language tooltips:
+- Depth Dial (large, central), seed (with a "Surprise me" dice button), scale/mood, root note, tempo, branch angle, Euclidean density, L-system preset, theme, ambient (rain/wind/none), layer volumes, X-ray toggle
+- Play/pause, stop, master volume, sleep timer, Evolve toggle
+- 4 one-click presets (e.g. "Quiet Forest", "Moonlit Pond", "Deep Dream", "Morning Light") that set every parameter
+- Shareable link: encode parameters in the URL hash so the same composition can be reopened
+Accessibility: keyboard operable everything, visible focus states, ARIA labels, labelled sliders with live values, WCAG-AA contrast, reduced-motion support, and a short on-screen "what you're seeing" explainer of the four algorithms.
+Welcome screen: a calm intro with a "Begin" button, headphone suggestion, and a 2-sentence explanation. Save the prompt log.
+
+### Response
+
+Built the translucent collapsible control panel in `src/ui/controls.js` and styled it in `src/styles.css`:
+- Full-screen canvas with auto-hiding translucent side panel (`☰`/`✕` toggle, `H` shortcut).
+- Controls with plain-language hints & live readouts: Depth Dial (`1–8`), Seed + `🎲` randomizer, Scale/Mood, Root Note, Tempo (`40–90 BPM`), Branch Angle, Euclidean Density, L-system Preset, Theme, Ambient (`Wind`/`Rain`/`None`), collapsible Layer Volumes + Mute buttons, X-Ray toggle (`X`), Evolve toggle, Sleep Timer (`5/15/30 min`), and Zoom slider.
+- Four one-click presets (`Quiet Forest`, `Moonlit Pond`, `Deep Dream`, `Morning Light`), URL hash share link (`🔗 Copy Share Link`), "What You're Seeing & Hearing" explainer, and keyboard shortcuts (`Space`, `X`, `↑`/`↓`, `H`).
+
+---
+
+## Prompt 5: WAV Export
+
+### Prompt
+
+Implement audio export. Add a "Download" button with duration choices (30s, 1 min, 3 min). Render the current score offline using Tone.Offline with the exact same voices, effects, and ambient layers, then encode to a 16-bit stereo WAV and download it as recursive-garden-<seed>-<depth>.wav. Show a progress indicator. Also export the parameters as a small JSON file next to it (optional second button). Verify that the exported file matches what plays live, including reverb tails (add a tail so the audio doesn't cut off), and that exports with the same seed are identical. Save the prompt log.
+
+### Response
+
+Implemented deterministic offline WAV & parameter JSON export sharing the exact live audio graph:
+- `src/audio/graph.js`: Extracted `createAudioGraph`, `triggerScoreEvent`, `configureAmbientNoise`, and `volumeToDb` so live playback (`src/audio/engine.js`) and offline export (`src/audio/export.js`) use the identical synth voices, envelopes, channels, delay, 6s convolution reverb, and `-3 dB` limiter.
+- `src/audio/export.js`: Added `exportScoreToWav` using `Tone.Offline(..., durationSeconds + 6, 2)` with seeded PRNG determinism for reverb/noise buffers, a 6-second reverb tail and smooth end fade-out, `encodeWav` (44-byte RIFF/WAVE 16-bit signed stereo PCM), `exportParamsToJson`, and `buildExportFilename` (`recursive-garden-<seed>-<depth>.wav` / `.json`).
+- `src/ui/controls.js` & `src/main.js`: Wired `⬇ Download WAV` (with 30s / 1 min / 3 min choices + progress bar + error handling) and `📄 JSON` parameter export button.
+- `tests/export.test.js`: Added 5 unit tests verifying 16-bit stereo RIFF/WAVE headers, sample clamping, byte-identical deterministic WAV encoding, filename formatting, and JSON parameter export. All 43 Vitest tests pass and `vite build` succeeds.
+
+---
+

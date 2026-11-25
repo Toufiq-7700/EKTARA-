@@ -1,42 +1,41 @@
 /**
  * Audio Engine — Tone.js Playback for Recursive Garden
- * 
- * Consumes the score (array of timed events) and plays them through
- * carefully crafted synth voices. Each voice is designed for relaxation:
- * soft attacks, long releases, warm tones.
- * 
- * Voices:
- *   - Melody: sine/triangle pluck-bell with slow attack
- *   - Canon: same timbre, quieter, more reverb
- *   - Bass: warm low sine, long release
- *   - Percussion: soft brushed noise, filtered chimes, wood taps
- *   - Ambient: evolving pad (detuned oscillators + LPF)
- * 
- * Effects chain: reverb → stereo delay → limiter → master volume
+ *
+ * Consumes the score (array of timed events) and plays it through the shared
+ * Tone.js voice & effects graph (src/audio/graph.js) so live playback and
+ * offline WAV export sound identical.
  */
 
 import * as Tone from 'tone';
+import {
+  createAudioGraph,
+  triggerScoreEvent,
+  configureAmbientNoise,
+  volumeToDb,
+  DEFAULT_LAYER_VOLUMES,
+  DEFAULT_LAYER_MIX_DB
+} from './graph.js';
+
+const START_OFFSET_SECONDS = 0.15;
 
 // ─── State ────────────────────────────────────────────────────────
 
 let isInitialized = false;
 let isPlaying = false;
+let graph = null;
 let scheduledEvents = [];
-let currentScore = null;
 let loopId = null;
 let sleepTimerId = null;
+let sleepStopTimeoutId = null;
 let evolveEnabled = false;
+let currentAmbientType = 'wind';
+let masterVolumeNormalized = 0.8;
+let currentScore = null;
 let onEventCallback = null;
+let onPlaybackStateChange = null;
+let currentPadNotes = [];
 
-// Voice volumes (0-1)
-const layerVolumes = {
-  melody: 0.7,
-  canon: 0.5,
-  bass: 0.6,
-  percussion: 0.4,
-  ambient: 0.5
-};
-
+const layerVolumes = { ...DEFAULT_LAYER_VOLUMES };
 const layerMuted = {
   melody: false,
   canon: false,
@@ -45,13 +44,19 @@ const layerMuted = {
   ambient: false
 };
 
-// ─── Synths and Effects ───────────────────────────────────────────
+/**
+ * Register a listener invoked when playback starts/pauses/stops (e.g., sleep timer).
+ * @param {Function|null} listener
+ */
+export function setPlaybackStateListener(listener) {
+  onPlaybackStateChange = listener;
+}
 
-let melodySynth, canonSynth, bassSynth;
-let percChime, percBrush, percTap;
-let ambientPad, ambientNoise;
-let reverb, delay, limiter, masterVol;
-let melodyCh, canonCh, bassCh, percCh, ambientCh;
+function notifyPlaybackState() {
+  if (onPlaybackStateChange) {
+    onPlaybackStateChange(getPlaybackState());
+  }
+}
 
 /**
  * Initialize the audio engine. Must be called after a user gesture.
@@ -60,298 +65,170 @@ export async function initAudio() {
   if (isInitialized) return;
 
   await Tone.start();
-
-  // ─── Master effects chain ────────────────────────────────
-  masterVol = new Tone.Volume(-6).toDestination();
-  limiter = new Tone.Limiter(-3).connect(masterVol);
-  reverb = new Tone.Reverb({ decay: 6, wet: 0.4 }).connect(limiter);
-  await reverb.generate();
-  delay = new Tone.FeedbackDelay({ delayTime: '8n.', feedback: 0.2, wet: 0.15 }).connect(reverb);
-
-  // ─── Per-layer channels ──────────────────────────────────
-  melodyCh = new Tone.Channel({ volume: -4, pan: 0 }).connect(delay);
-  canonCh = new Tone.Channel({ volume: -10, pan: 0 }).connect(delay);
-  bassCh = new Tone.Channel({ volume: -6, pan: 0 }).connect(reverb);
-  percCh = new Tone.Channel({ volume: -12, pan: 0 }).connect(delay);
-  ambientCh = new Tone.Channel({ volume: -10, pan: 0 }).connect(reverb);
-
-  // ─── Melody synth: soft pluck-bell ───────────────────────
-  melodySynth = new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 8,
-    voice: Tone.Synth,
-    options: {
-      oscillator: { type: 'sine' },
-      envelope: {
-        attack: 0.15,
-        decay: 0.6,
-        sustain: 0.3,
-        release: 1.5
-      },
-      volume: -6
-    }
-  }).connect(melodyCh);
-
-  // ─── Canon synth: same but quieter with more reverb ──────
-  canonSynth = new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 6,
-    voice: Tone.Synth,
-    options: {
-      oscillator: { type: 'triangle' },
-      envelope: {
-        attack: 0.3,
-        decay: 0.8,
-        sustain: 0.2,
-        release: 2.5
-      },
-      volume: -12
-    }
-  }).connect(canonCh);
-
-  // ─── Bass synth: warm sine ───────────────────────────────
-  bassSynth = new Tone.MonoSynth({
-    oscillator: { type: 'sine' },
-    envelope: {
-      attack: 0.2,
-      decay: 0.4,
-      sustain: 0.6,
-      release: 3.0
-    },
-    filterEnvelope: {
-      attack: 0.1,
-      decay: 0.3,
-      sustain: 0.5,
-      release: 2.0,
-      baseFrequency: 100,
-      octaves: 2
-    },
-    volume: -8
-  }).connect(bassCh);
-
-  // ─── Percussion: three types ─────────────────────────────
-  // Chime: filtered metallic ping
-  percChime = new Tone.MetalSynth({
-    frequency: 800,
-    envelope: { attack: 0.001, decay: 0.4, release: 0.3 },
-    harmonicity: 5.1,
-    modulationIndex: 16,
-    resonance: 2000,
-    octaves: 1,
-    volume: -24
-  }).connect(percCh);
-
-  // Brush: filtered noise burst
-  percBrush = new Tone.NoiseSynth({
-    noise: { type: 'pink' },
-    envelope: { attack: 0.005, decay: 0.15, sustain: 0, release: 0.1 },
-    volume: -20
-  }).connect(percCh);
-
-  // Tap: soft membrane hit
-  percTap = new Tone.MembraneSynth({
-    pitchDecay: 0.01,
-    octaves: 2,
-    envelope: { attack: 0.001, decay: 0.2, sustain: 0, release: 0.1 },
-    volume: -22
-  }).connect(percCh);
-
-  // ─── Ambient pad: detuned oscillators through LPF ────────
-  ambientPad = new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 4,
-    voice: Tone.Synth,
-    options: {
-      oscillator: { type: 'sine4' },
-      envelope: {
-        attack: 4,
-        decay: 2,
-        sustain: 0.8,
-        release: 6
-      },
-      volume: -18
-    }
-  }).connect(ambientCh);
-
-  // Ambient noise: soft filtered white noise for wind/rain
-  ambientNoise = new Tone.Noise('brown').connect(
-    new Tone.Filter({ frequency: 400, type: 'lowpass' }).connect(
-      new Tone.Volume(-30).connect(ambientCh)
-    )
-  );
+  graph = await createAudioGraph({
+    layerVolumes,
+    layerMuted,
+    masterVolume: masterVolumeNormalized,
+    ambientType: currentAmbientType
+  });
 
   isInitialized = true;
-  console.log('🔊 Audio engine initialized');
 }
 
 /**
- * Schedule and play a score.
- * 
+ * Schedule and play a score from Transport time 0.
+ *
  * @param {Object} score - Score from buildScore()
  * @param {Function} [onEvent] - Callback fired for each event: onEvent(event, time)
+ * @param {Object} [options] - { skipFadeIn?: boolean }
  */
-export function playScore(score, onEvent) {
-  if (!isInitialized) {
+export function playScore(score, onEvent, options = {}) {
+  if (!isInitialized || !graph) {
     console.warn('Audio not initialized. Call initAudio() first.');
     return;
   }
 
-  stopPlayback();
+  stopPlayback({ silentNotify: true });
   currentScore = score;
   onEventCallback = onEvent || null;
 
-  // Apply 4-second fade-in
-  if (masterVol) {
-    masterVol.volume.value = -60;
-    masterVol.volume.rampTo(-6, 4);
+  const targetDb = volumeToDb(masterVolumeNormalized, -6);
+  if (options.skipFadeIn) {
+    graph.masterVol.volume.rampTo(targetDb, 0.25);
+  } else {
+    // Soft 4-second fade-in on start
+    graph.masterVol.volume.value = -60;
+    graph.masterVol.volume.rampTo(targetDb, 4);
   }
 
-  // Start ambient noise
-  if (ambientNoise && ambientNoise.state !== 'started') {
-    ambientNoise.start();
+  // Start ambient noise only when enabled and unmuted
+  configureAmbientNoise(graph, currentAmbientType);
+  if (currentAmbientType !== 'none' && !layerMuted.ambient && graph.ambientNoise.state !== 'started') {
+    graph.ambientNoise.start();
   }
 
-  // Start ambient pad with the root note
+  // Start ambient pad chord anchored on the root note
   const rootNote = score.params?.rootNote || 60;
   const rootName = Tone.Frequency(rootNote, 'midi').toNote();
-  if (ambientPad) {
-    // Play a slow chord
-    const padNotes = [rootName, Tone.Frequency(rootNote + 7, 'midi').toNote()];
-    ambientPad.triggerAttack(padNotes, Tone.now(), 0.3);
+  const fifthName = Tone.Frequency(rootNote + 7, 'midi').toNote();
+  currentPadNotes = [rootName, fifthName];
+  if (!layerMuted.ambient) {
+    graph.ambientPad.triggerAttack(currentPadNotes, Tone.now(), 0.3);
   }
 
-  // Schedule all events
-  const now = Tone.now() + 0.5; // small offset to prevent timing issues
+  // Reset Transport to 0 so getCurrentTime() aligns with score event times
+  const transport = Tone.getTransport();
+  transport.seconds = 0;
   scheduledEvents = [];
 
   for (const event of score.events) {
-    const eventTime = now + event.time;
-
-    const id = Tone.getTransport().schedule((time) => {
-      triggerEvent(event, time);
+    const transportTime = START_OFFSET_SECONDS + event.time;
+    const id = transport.schedule((time) => {
+      try {
+        triggerScoreEvent(graph, event, time, layerMuted);
+      } catch (err) {
+        console.warn('Audio event error:', err.message);
+      }
       if (onEventCallback) {
         onEventCallback(event, time);
       }
-    }, eventTime);
+    }, transportTime);
 
     scheduledEvents.push(id);
   }
 
-  // Setup loop if needed
-  const duration = score.duration;
-  loopId = Tone.getTransport().schedule((time) => {
-    if (evolveEnabled) {
-      // Evolve: increment seed and rebuild
-      const newParams = { ...score.params, seed: score.params.seed + 1 };
-      // Will be called from outside to rebuild
-      if (onEventCallback) {
-        onEventCallback({ voice: '_loop', meta: { newParams } }, time);
+  // Schedule seamless loop or Evolve transition at end of score
+  const cycleEnd = START_OFFSET_SECONDS + score.duration;
+  loopId = transport.schedule((time) => {
+    setTimeout(() => {
+      if (!isPlaying) return;
+      if (evolveEnabled) {
+        const nextSeed = (score.params?.seed ?? 42) + 1;
+        const curDepth = score.params?.depth ?? 4;
+        // Gently drift depth +/- 1 every few cycles while keeping within [2, 7]
+        const drift = nextSeed % 3 === 0 ? (nextSeed % 2 === 0 ? 1 : -1) : 0;
+        const nextDepth = Math.max(2, Math.min(7, curDepth + drift));
+        const newParams = { ...score.params, seed: nextSeed, depth: nextDepth };
+        if (onEventCallback) {
+          onEventCallback({ voice: '_loop', meta: { newParams } }, time);
+        }
+      } else {
+        playScore(score, onEventCallback, { skipFadeIn: true });
       }
-    } else {
-      // Simple loop: replay same score
-      playScore(score, onEvent);
-    }
-  }, now + duration);
+    }, 0);
+  }, cycleEnd);
 
-  Tone.getTransport().start();
+  transport.start();
   isPlaying = true;
+  notifyPlaybackState();
 }
 
 /**
- * Trigger a single musical event on the appropriate voice.
- */
-function triggerEvent(event, time) {
-  const { voice, note, duration, velocity, pan } = event;
-
-  // Check mute
-  if (layerMuted[voice]) return;
-
-  try {
-    switch (voice) {
-      case 'melody':
-        if (melodySynth && note) {
-          melodySynth.triggerAttackRelease(note, duration, time, velocity * layerVolumes.melody);
-        }
-        break;
-
-      case 'canon':
-        if (canonSynth && note) {
-          canonSynth.triggerAttackRelease(note, duration, time, velocity * layerVolumes.canon);
-        }
-        break;
-
-      case 'bass':
-        if (bassSynth && note) {
-          bassSynth.triggerAttackRelease(note, duration, time, velocity * layerVolumes.bass);
-        }
-        break;
-
-      case 'percussion': {
-        const percVel = velocity * layerVolumes.percussion;
-        const percType = event.meta?.percType || 'brush';
-        switch (percType) {
-          case 'chime':
-            percChime?.triggerAttackRelease('16n', time, percVel);
-            break;
-          case 'brush':
-            percBrush?.triggerAttackRelease('32n', time, percVel);
-            break;
-          case 'tap':
-            percTap?.triggerAttackRelease('C2', '16n', time, percVel);
-            break;
-        }
-        break;
-      }
-    }
-  } catch (err) {
-    // Swallow individual note errors to keep playback going
-    console.warn('Audio event error:', err.message);
-  }
-}
-
-/**
- * Pause playback.
+ * Pause playback cleanly (including ambient pad & noise).
  */
 export function pausePlayback() {
   Tone.getTransport().pause();
+  try {
+    graph?.melodySynth?.releaseAll();
+    graph?.canonSynth?.releaseAll();
+    graph?.ambientPad?.releaseAll();
+    if (graph?.ambientNoise?.state === 'started') {
+      graph.ambientNoise.stop();
+    }
+  } catch (_) { /* ignore */ }
   isPlaying = false;
+  notifyPlaybackState();
 }
 
 /**
  * Resume playback after pause.
  */
 export function resumePlayback() {
+  if (!isInitialized || !graph) return;
+  if (currentAmbientType !== 'none' && !layerMuted.ambient && graph.ambientNoise.state !== 'started') {
+    graph.ambientNoise.start();
+  }
+  if (!layerMuted.ambient && currentPadNotes.length > 0) {
+    graph.ambientPad.triggerAttack(currentPadNotes, Tone.now(), 0.3);
+  }
   Tone.getTransport().start();
   isPlaying = true;
+  notifyPlaybackState();
 }
 
 /**
  * Stop playback and clear all scheduled events.
  */
-export function stopPlayback() {
-  Tone.getTransport().stop();
-  Tone.getTransport().cancel();
+export function stopPlayback(options = {}) {
+  const transport = Tone.getTransport();
+  transport.stop();
+  transport.cancel();
+  transport.seconds = 0;
   scheduledEvents = [];
+  loopId = null;
 
-  // Release all synths
   try {
-    melodySynth?.releaseAll();
-    canonSynth?.releaseAll();
-    ambientPad?.releaseAll();
-    if (ambientNoise?.state === 'started') ambientNoise.stop();
-  } catch (e) { /* ignore */ }
-
-  if (loopId !== null) {
-    loopId = null;
-  }
+    graph?.melodySynth?.releaseAll();
+    graph?.canonSynth?.releaseAll();
+    graph?.ambientPad?.releaseAll();
+    if (graph?.ambientNoise?.state === 'started') {
+      graph.ambientNoise.stop();
+    }
+  } catch (_) { /* ignore */ }
 
   isPlaying = false;
+  if (!options.silentNotify) {
+    notifyPlaybackState();
+  }
 }
 
 /**
  * Set master volume (0-1).
  */
 export function setMasterVolume(value) {
-  if (masterVol) {
-    const db = value <= 0 ? -Infinity : 20 * Math.log10(value) - 6;
-    masterVol.volume.rampTo(db, 0.1);
+  masterVolumeNormalized = Math.max(0, Math.min(1, value));
+  if (graph?.masterVol) {
+    graph.masterVol.volume.rampTo(volumeToDb(masterVolumeNormalized, -6), 0.1);
   }
 }
 
@@ -359,11 +236,11 @@ export function setMasterVolume(value) {
  * Set per-layer volume (0-1).
  */
 export function setLayerVolume(layer, value) {
-  layerVolumes[layer] = value;
-  const channels = { melody: melodyCh, canon: canonCh, bass: bassCh, percussion: percCh, ambient: ambientCh };
-  if (channels[layer]) {
-    const db = value <= 0 ? -60 : 20 * Math.log10(value) - 6;
-    channels[layer].volume.rampTo(db, 0.3);
+  const clamped = Math.max(0, Math.min(1, value));
+  layerVolumes[layer] = clamped;
+  const channel = graph?.channels?.[layer];
+  if (channel) {
+    channel.volume.rampTo(volumeToDb(clamped, DEFAULT_LAYER_MIX_DB[layer] ?? -6), 0.25);
   }
 }
 
@@ -371,57 +248,91 @@ export function setLayerVolume(layer, value) {
  * Mute/unmute a layer.
  */
 export function setLayerMute(layer, muted) {
-  layerMuted[layer] = muted;
-  const channels = { melody: melodyCh, canon: canonCh, bass: bassCh, percussion: percCh, ambient: ambientCh };
-  if (channels[layer]) {
-    channels[layer].mute = muted;
+  layerMuted[layer] = !!muted;
+  const channel = graph?.channels?.[layer];
+  if (channel) {
+    channel.mute = !!muted;
+  }
+  if (layer === 'ambient' && graph) {
+    if (muted) {
+      graph.ambientPad.releaseAll();
+      if (graph.ambientNoise.state === 'started') graph.ambientNoise.stop();
+    } else if (isPlaying) {
+      if (currentAmbientType !== 'none' && graph.ambientNoise.state !== 'started') {
+        graph.ambientNoise.start();
+      }
+      if (currentPadNotes.length > 0) {
+        graph.ambientPad.triggerAttack(currentPadNotes, Tone.now(), 0.3);
+      }
+    }
   }
 }
 
 /**
- * Set the sleep timer: fade out and stop after the given minutes.
+ * Get current layer volumes and mute states (used by WAV export to match live mix).
+ */
+export function getAudioMixSettings() {
+  return {
+    masterVolume: masterVolumeNormalized,
+    layerVolumes: { ...layerVolumes },
+    layerMuted: { ...layerMuted },
+    ambientType: currentAmbientType
+  };
+}
+
+/**
+ * Set the sleep timer: fade out smoothly over the final 10s and stop.
  */
 export function setSleepTimer(minutes) {
   if (sleepTimerId) {
     clearTimeout(sleepTimerId);
     sleepTimerId = null;
   }
+  if (sleepStopTimeoutId) {
+    clearTimeout(sleepStopTimeoutId);
+    sleepStopTimeoutId = null;
+  }
   if (minutes <= 0) return;
 
-  const fadeStart = (minutes * 60 - 10) * 1000; // start fading 10s before end
   const totalMs = minutes * 60 * 1000;
+  const fadeMs = Math.min(10000, totalMs);
+  const fadeStart = Math.max(0, totalMs - fadeMs);
 
   sleepTimerId = setTimeout(() => {
-    // Start fading
-    if (masterVol) {
-      masterVol.volume.rampTo(-60, 10);
+    if (graph?.masterVol) {
+      graph.masterVol.volume.rampTo(-60, fadeMs / 1000);
     }
-    setTimeout(() => {
+    sleepStopTimeoutId = setTimeout(() => {
       stopPlayback();
-    }, 10000);
+    }, fadeMs);
   }, fadeStart);
 }
 
 /**
- * Enable/disable evolve mode (seed increments after each loop).
+ * Enable/disable evolve mode (seed increments and depth drifts gently each loop).
  */
 export function setEvolve(enabled) {
-  evolveEnabled = enabled;
+  evolveEnabled = !!enabled;
 }
 
 /**
  * Set ambient type: 'rain', 'wind', or 'none'.
  */
 export function setAmbientType(type) {
-  if (!ambientNoise) return;
+  currentAmbientType = type;
+  if (!graph) return;
   try {
     if (type === 'none') {
-      if (ambientNoise.state === 'started') ambientNoise.stop();
+      if (graph.ambientNoise.state === 'started') {
+        graph.ambientNoise.stop();
+      }
     } else {
-      ambientNoise.set({ type: type === 'rain' ? 'white' : 'brown' });
-      if (ambientNoise.state !== 'started' && isPlaying) ambientNoise.start();
+      configureAmbientNoise(graph, type);
+      if (graph.ambientNoise.state !== 'started' && isPlaying && !layerMuted.ambient) {
+        graph.ambientNoise.start();
+      }
     }
-  } catch (e) { /* ignore */ }
+  } catch (_) { /* ignore */ }
 }
 
 /**
@@ -431,41 +342,26 @@ export function getPlaybackState() {
   return {
     isPlaying,
     isInitialized,
-    currentTime: Tone.now(),
+    currentTime: getCurrentTime(),
     transportState: Tone.getTransport().state
   };
 }
 
 /**
- * Get current transport position for syncing visuals.
+ * Get current score playback position (seconds) for syncing visuals.
  */
 export function getCurrentTime() {
-  return Tone.getTransport().seconds;
+  return Math.max(0, Tone.getTransport().seconds - START_OFFSET_SECONDS);
 }
 
 /**
  * Dispose all audio resources.
  */
 export function disposeAudio() {
-  stopPlayback();
-  try {
-    melodySynth?.dispose();
-    canonSynth?.dispose();
-    bassSynth?.dispose();
-    percChime?.dispose();
-    percBrush?.dispose();
-    percTap?.dispose();
-    ambientPad?.dispose();
-    ambientNoise?.dispose();
-    reverb?.dispose();
-    delay?.dispose();
-    limiter?.dispose();
-    masterVol?.dispose();
-    melodyCh?.dispose();
-    canonCh?.dispose();
-    bassCh?.dispose();
-    percCh?.dispose();
-    ambientCh?.dispose();
-  } catch (e) { /* ignore */ }
+  stopPlayback({ silentNotify: true });
+  if (sleepTimerId) clearTimeout(sleepTimerId);
+  if (sleepStopTimeoutId) clearTimeout(sleepStopTimeoutId);
+  graph?.dispose();
+  graph = null;
   isInitialized = false;
 }

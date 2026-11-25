@@ -441,7 +441,43 @@ select option {
   margin-bottom: 6px;
 }
 
-.share-btn:hover, .download-btn:hover {
+.export-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.export-actions .download-btn {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.export-actions .download-btn.secondary {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #c0b0d0;
+}
+
+.download-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-status {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: #a8d5a2;
+  min-height: 1em;
+}
+
+.export-status.error {
+  color: #ff8a8a;
+}
+
+.share-btn:hover, .download-btn:hover:not(:disabled) {
   background: rgba(240, 160, 96, 0.25);
 }
 

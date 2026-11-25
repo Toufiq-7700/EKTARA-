@@ -9,7 +9,9 @@
 import { buildScore } from './algorithms/score.js';
 import { initAudio, playScore, pausePlayback, resumePlayback, stopPlayback, 
          setMasterVolume, setLayerVolume, setLayerMute, setSleepTimer,
-         setEvolve, setAmbientType, getPlaybackState, getCurrentTime } from './audio/engine.js';
+         setEvolve, setAmbientType, getPlaybackState, getCurrentTime,
+         getAudioMixSettings, setPlaybackStateListener } from './audio/engine.js';
+import { exportScoreToWav, exportParamsToJson, triggerBlobDownload } from './audio/export.js';
 import { initVisuals, startVisuals, stopVisuals, updateScore, 
          setXRay, setZoom, onVisualEvent, setTheme } from './visuals/renderer.js';
 import { buildUI } from './ui/controls.js';
@@ -32,7 +34,8 @@ export const defaultParams = {
 // Current mutable state
 let currentParams = { ...defaultParams };
 let currentScore = null;
-let visualsRunning = false;
+let evolveEnabled = false;
+let uiHandle = null;
 
 // ─── DOM References ──────────────────────────────────────────────
 
@@ -82,12 +85,13 @@ beginBtn.addEventListener('click', async () => {
   playScore(currentScore, onScoreEvent);
 
   // Initialize UI controls
-  buildUI(uiOverlay, {
+  uiHandle = buildUI(uiOverlay, {
     getParams, setParams, rebuildAndPlay, saveParamsToHash,
     pausePlayback, resumePlayback, stopPlayback,
     setMasterVolume, setLayerVolume, setLayerMute,
-    setSleepTimer, setEvolve, setAmbientType,
-    setCurrentTheme, toggleXRay, setZoomLevel
+    setSleepTimer, setEvolve: handleSetEvolve, setAmbientType,
+    setCurrentTheme, toggleXRay, setZoomLevel,
+    exportWav, exportJson, setPlaybackStateListener
   });
 
   console.log('🌳 Recursive Garden started');
@@ -100,10 +104,13 @@ function onScoreEvent(event, time) {
   onVisualEvent(event);
   
   if (event.voice === '_loop') {
-    // Evolve: rebuild with new params
+    // Evolve: rebuild with new params and sync UI + visuals
     currentParams = { ...currentParams, ...event.meta.newParams };
     currentScore = buildScore(currentParams);
-    playScore(currentScore, onScoreEvent);
+    updateScore(currentScore, currentParams.theme);
+    uiHandle?.updateControlsFromParams(currentParams);
+    saveParamsToHash();
+    playScore(currentScore, onScoreEvent, { skipFadeIn: true });
     return;
   }
 }
@@ -170,6 +177,29 @@ export function toggleXRay(enabled) {
 
 export function setZoomLevel(level) {
   setZoom(level);
+}
+
+export function handleSetEvolve(enabled) {
+  evolveEnabled = !!enabled;
+  setEvolve(evolveEnabled);
+}
+
+export async function exportWav(durationSeconds, onProgress) {
+  const mixSettings = getAudioMixSettings();
+  const result = await exportScoreToWav(currentParams, {
+    durationSeconds,
+    mixSettings,
+    evolve: evolveEnabled,
+    onProgress
+  });
+  triggerBlobDownload(result.blob, result.filename);
+  return result;
+}
+
+export function exportJson() {
+  const result = exportParamsToJson(currentParams);
+  triggerBlobDownload(result.blob, result.filename);
+  return result;
 }
 
 export { 

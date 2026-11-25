@@ -53,7 +53,8 @@ export function buildUI(container, callbacks) {
     pausePlayback, resumePlayback, stopPlayback,
     setMasterVolume, setLayerVolume, setLayerMute,
     setSleepTimer, setEvolve, setAmbientType,
-    setCurrentTheme, toggleXRay, setZoomLevel
+    setCurrentTheme, toggleXRay, setZoomLevel,
+    exportWav, exportJson, setPlaybackStateListener
   } = callbacks;
 
   let panelVisible = true;
@@ -261,18 +262,23 @@ export function buildUI(container, callbacks) {
           </div>
         </details>
 
-        <!-- Download (placeholder for Prompt 5) -->
+        <!-- Download WAV & Parameters JSON -->
         <div class="control-group" id="export-group" role="group" aria-label="Export">
-          <button id="download-btn" class="download-btn" aria-label="Download audio">⬇ Download WAV</button>
+          <label for="export-duration">Export Composition</label>
           <select id="export-duration" aria-label="Export duration">
-            <option value="30">30 seconds</option>
-            <option value="60" selected>1 minute</option>
-            <option value="180">3 minutes</option>
+            <option value="30">30 seconds (+6s tail)</option>
+            <option value="60" selected>1 minute (+6s tail)</option>
+            <option value="180">3 minutes (+6s tail)</option>
           </select>
-          <div id="export-progress" class="export-progress" style="display:none;">
+          <div class="export-actions">
+            <button id="download-btn" class="download-btn" aria-label="Download WAV audio">⬇ Download WAV</button>
+            <button id="download-json-btn" class="download-btn secondary" aria-label="Export parameters JSON" title="Download parameters as JSON">📄 JSON</button>
+          </div>
+          <div id="export-progress" class="export-progress" style="display:none;" role="status" aria-live="polite">
             <div id="export-bar" class="export-bar"></div>
             <span id="export-text">Rendering...</span>
           </div>
+          <p id="export-status" class="export-status" role="status" aria-live="polite"></p>
         </div>
       </div>
     </div>
@@ -493,6 +499,72 @@ export function buildUI(container, callbacks) {
       prompt('Share this link:', url);
     });
   });
+
+  // ─── WAV & JSON Export ────────────────────────────────────
+  const downloadBtn = container.querySelector('#download-btn');
+  const downloadJsonBtn = container.querySelector('#download-json-btn');
+  const exportDuration = container.querySelector('#export-duration');
+  const exportProgress = container.querySelector('#export-progress');
+  const exportBar = container.querySelector('#export-bar');
+  const exportText = container.querySelector('#export-text');
+  const exportStatus = container.querySelector('#export-status');
+
+  if (downloadBtn && exportWav) {
+    downloadBtn.addEventListener('click', async () => {
+      const durationSeconds = parseInt(exportDuration.value, 10) || 60;
+      downloadBtn.disabled = true;
+      exportDuration.disabled = true;
+      exportStatus.textContent = '';
+      exportStatus.classList.remove('error');
+      exportProgress.style.display = 'block';
+      exportBar.style.width = '5%';
+      exportText.textContent = 'Starting offline render...';
+
+      try {
+        const result = await exportWav(durationSeconds, (pct, msg) => {
+          exportBar.style.width = `${pct}%`;
+          exportText.textContent = `${msg} (${pct}%)`;
+        });
+        exportStatus.textContent = `Saved ${result.filename}`;
+        setTimeout(() => {
+          exportProgress.style.display = 'none';
+        }, 1200);
+      } catch (err) {
+        console.error('WAV export failed:', err);
+        exportProgress.style.display = 'none';
+        exportStatus.textContent = 'Export failed — please try a shorter duration or reload.';
+        exportStatus.classList.add('error');
+      } finally {
+        downloadBtn.disabled = false;
+        exportDuration.disabled = false;
+      }
+    });
+  }
+
+  if (downloadJsonBtn && exportJson) {
+    downloadJsonBtn.addEventListener('click', () => {
+      try {
+        const res = exportJson();
+        exportStatus.classList.remove('error');
+        exportStatus.textContent = `Saved ${res.filename}`;
+      } catch (err) {
+        exportStatus.textContent = 'Could not export parameters JSON.';
+        exportStatus.classList.add('error');
+      }
+    });
+  }
+
+  // Keep play/pause button synced if sleep timer or stop changes state externally
+  if (setPlaybackStateListener) {
+    setPlaybackStateListener((state) => {
+      isPlayingState = state.isPlaying;
+      const playPauseBtn = container.querySelector('#play-pause-btn');
+      if (playPauseBtn) {
+        playPauseBtn.textContent = isPlayingState ? '⏸' : '▶';
+        playPauseBtn.setAttribute('aria-label', isPlayingState ? 'Pause' : 'Play');
+      }
+    });
+  }
 
   // ─── Keyboard shortcuts ──────────────────────────────────
 
