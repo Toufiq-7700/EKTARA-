@@ -12,6 +12,13 @@ import { humaniseEvent } from './instruments.js';
 import { EXPORT_TAIL_SECONDS, volumeToDb } from './graph.js';
 
 const SAMPLE_RATE = 44100;
+const SIN_SIZE = 2048;
+const SIN_MASK = SIN_SIZE - 1;
+const SIN_TABLE = new Float32Array(SIN_SIZE);
+for (let i = 0; i < SIN_SIZE; i++) {
+  SIN_TABLE[i] = Math.sin((i / SIN_SIZE) * Math.PI * 2);
+}
+const IS_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
 function dbToGain(db) {
   return db <= -60 ? 0 : Math.pow(10, db / 20);
@@ -45,14 +52,15 @@ function addToneNote(left, right, totalSamples, {
   const lGain = peak * Math.cos((panClamped + 1) * Math.PI * 0.25);
   const rGain = peak * Math.sin((panClamped + 1) * Math.PI * 0.25);
 
-  const twoPi = Math.PI * 2;
-  const phaseInc = (twoPi * Math.max(20, freq)) / SAMPLE_RATE;
-  const modInc = fmRatio > 0 ? (twoPi * Math.max(20, freq * fmRatio)) / SAMPLE_RATE : 0;
-  const modAmp = fmRatio > 0 && fmIndex > 0 ? (fmIndex / Math.max(20, freq)) : 0;
+  const safeFreq = Math.max(20, freq);
+  const phaseInc = (SIN_SIZE * safeFreq) / SAMPLE_RATE;
+  const modInc = fmRatio > 0 ? (SIN_SIZE * safeFreq * fmRatio) / SAMPLE_RATE : 0;
+  const modAmp = fmRatio > 0 && fmIndex > 0 ? ((fmIndex / safeFreq) * (SIN_SIZE / (Math.PI * 2))) : 0;
 
   let phase = 0;
   let modPhase = 0;
   const totalLen = durSamples + relSamples;
+  const susSlope = 0.28 / Math.max(1, durSamples - attSamples);
 
   for (let i = startIdx; i < endIdx; i++) {
     const n = i - startIdx;
@@ -60,21 +68,22 @@ function addToneNote(left, right, totalSamples, {
     if (n < attSamples) {
       env = n / attSamples;
     } else if (n < durSamples) {
-      env = 1 - 0.28 * ((n - attSamples) / Math.max(1, durSamples - attSamples));
+      env = 1 - susSlope * (n - attSamples);
     } else {
-      const rn = (n - durSamples) / relSamples;
-      env = 0.72 * (1 - rn) * (1 - rn);
+      const rn = 1 - (n - durSamples) / relSamples;
+      env = 0.72 * rn * rn;
     }
 
     let sample;
     if (modInc > 0) {
-      const modDecay = Math.exp(-3.5 * (n / totalLen));
-      sample = Math.sin(phase + modAmp * modDecay * Math.sin(modPhase));
+      const modDecay = 1 - n / totalLen;
+      const modVal = SIN_TABLE[modPhase & SIN_MASK];
+      sample = SIN_TABLE[(phase + modAmp * modDecay * modDecay * modVal) & SIN_MASK];
       modPhase += modInc;
     } else if (warm) {
-      sample = Math.sin(phase) * 0.8 + Math.sin(phase * 2) * 0.14;
+      sample = SIN_TABLE[phase & SIN_MASK] * 0.8 + SIN_TABLE[(phase * 2) & SIN_MASK] * 0.14;
     } else {
-      sample = Math.sin(phase);
+      sample = SIN_TABLE[phase & SIN_MASK];
     }
     phase += phaseInc;
 
@@ -156,13 +165,27 @@ export function encodeWav(audioBuffer) {
   writeAscii(view, 36, 'data');
   view.setUint32(40, dataSize, true);
 
-  let offset = 44;
-  for (let i = 0; i < numSamples; i++) {
-    const l = Math.max(-1, Math.min(1, left[i]));
-    const r = Math.max(-1, Math.min(1, right[i]));
-    view.setInt16(offset, l < 0 ? l * 0x8000 : l * 0x7fff, true);
-    view.setInt16(offset + 2, r < 0 ? r * 0x8000 : r * 0x7fff, true);
-    offset += 4;
+  if (IS_LITTLE_ENDIAN) {
+    const pcm = new Int16Array(buffer, 44, numSamples * 2);
+    for (let i = 0, j = 0; i < numSamples; i++) {
+      let l = left[i];
+      if (l > 1) l = 1;
+      else if (l < -1) l = -1;
+      let r = right[i];
+      if (r > 1) r = 1;
+      else if (r < -1) r = -1;
+      pcm[j++] = l < 0 ? l * 0x8000 : l * 0x7fff;
+      pcm[j++] = r < 0 ? r * 0x8000 : r * 0x7fff;
+    }
+  } else {
+    let offset = 44;
+    for (let i = 0; i < numSamples; i++) {
+      const l = Math.max(-1, Math.min(1, left[i]));
+      const r = Math.max(-1, Math.min(1, right[i]));
+      view.setInt16(offset, l < 0 ? l * 0x8000 : l * 0x7fff, true);
+      view.setInt16(offset + 2, r < 0 ? r * 0x8000 : r * 0x7fff, true);
+      offset += 4;
+    }
   }
 
   return buffer;
@@ -320,9 +343,18 @@ export async function exportScoreToWav(params, options = {}) {
   let cycleStart = 0.15;
   let cycleParams = { ...params };
   let cycleScore = initialScore;
+  let cycleCount = 0;
+  const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
 
   while (cycleStart < durationSeconds - 0.5) {
     checkAborted();
+    if (cycleCount > 0 && cycleCount % 6 === 0) {
+      const pct = Math.min(62, Math.round(28 + (cycleStart / durationSeconds) * 34));
+      onProgress(pct, 'Synthesizing stereo audio...');
+      await yieldFrame();
+      checkAborted();
+    }
+    cycleCount++;
     const cycleRng = createPRNG((cycleParams.seed ?? 42) + 9091);
     for (const rawEvent of cycleScore.events) {
       const event = humaniseEvent(rawEvent, cycleRng);
