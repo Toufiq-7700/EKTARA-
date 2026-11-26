@@ -24,7 +24,16 @@
  * @param {number} maxDepth - Current max depth to show (for growth animation)
  * @returns {Object[]} Array of branch objects (capped at 2200 for 60fps)
  */
-export function computeTreeBranches(commands, branchAngles, baseAngle, startX, startY, targetHeight, maxDepth = 999) {
+export function computeTreeBranches(
+  commands,
+  branchAngles,
+  baseAngle,
+  startX,
+  startY,
+  targetHeight,
+  maxDepth = 999,
+  lengthDecay = 0.72
+) {
   const MAX_BRANCHES = 2200;
   const raw = [];
   const stack = [];
@@ -34,7 +43,6 @@ export function computeTreeBranches(commands, branchAngles, baseAngle, startX, s
   let depth = 0;
   let branchIndex = 0;
   let currentLength = 1;
-  const lengthDecay = 0.72; // branches shrink per depth level
 
   let minY = 0;
   let maxY = 0;
@@ -141,7 +149,13 @@ export function drawTree(
   time,
   windPhase,
   reducedMotion,
-  { glowEnabled = true, highlightedBranchIdx = null, highlightColor = '#f0c878' } = {}
+  {
+    glowEnabled = true,
+    highlightedBranchIdx = null,
+    highlightColor = '#f0c878',
+    lineThickness = 6,
+    leafDensity = 0.7
+  } = {}
 ) {
   if (!branches || branches.length === 0) return;
 
@@ -171,8 +185,8 @@ export function drawTree(
     const y2 = branch.y2 + swayY + dip;
 
     // Branch width based on depth (thicker trunk, thinner tips)
-    const maxWidth = 6;
-    const lineWidth = Math.max(0.6, maxWidth - branch.depth * 0.8);
+    const maxWidth = Math.max(2, lineThickness);
+    const lineWidth = Math.max(0.6, maxWidth - branch.depth * (maxWidth * 0.13));
 
     const isActive = activeBranches.has(branch.index);
     const isHighlighted = highlightedBranchIdx !== null &&
@@ -204,12 +218,12 @@ export function drawTree(
       ctx.stroke();
     }
 
-    // Draw leaves/blossoms at tips
-    if (branch.isTip) {
+    // Draw leaves/blossoms at tips scaled by leafDensity
+    if (branch.isTip && leafDensity > 0.02 && ((branch.index % 10) / 10) <= leafDensity) {
       ctx.beginPath();
-      ctx.arc(x2, y2, 2 + Math.sin(time * 0.5 + branch.index) * 0.5, 0, Math.PI * 2);
+      ctx.arc(x2, y2, (1.6 + leafDensity * 1.4) + Math.sin(time * 0.5 + branch.index) * 0.5, 0, Math.PI * 2);
       ctx.fillStyle = branch.index % 3 === 0 ? theme.tree.blossom : theme.tree.leaf;
-      ctx.globalAlpha = 0.6;
+      ctx.globalAlpha = 0.35 + leafDensity * 0.35;
       ctx.fill();
       ctx.globalAlpha = 1;
     }

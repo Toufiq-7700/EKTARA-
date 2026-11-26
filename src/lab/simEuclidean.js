@@ -7,10 +7,11 @@
  *   and a sweeping playhead hand synced to the audio beat.
  */
 
-import { bjorklundSteps } from '../algorithms/bjorklund.js';
+import { bjorklundSteps, rotatePattern } from '../algorithms/bjorklund.js';
 import { ALGORITHMS } from '../algorithms/meta.js';
 
 const COLOR = ALGORITHMS.bjorklund.color;
+const RING_COLORS = ['#a0f078', '#78e0c8', '#d4f078'];
 
 export function createEuclideanSim() {
   let dotBoxes = [];
@@ -26,11 +27,18 @@ export function createEuclideanSim() {
     dotBoxes = [];
     if (!score) return;
 
-    const depth = score.params?.depth || 4;
-    const density = score.params?.densityEuclid || 1;
-    const n = customN ?? (8 + depth * 2);
-    const k = customK ?? Math.min(n, Math.max(1, Math.round((2 + depth) * density)));
-    const { steps: mergeSteps, pattern } = bjorklundSteps(k, n);
+    const rings = score.euclideanRings && score.euclideanRings.length > 0
+      ? score.euclideanRings
+      : [{ pulses: 5, steps: 16, rotation: 0, pattern: score.euclideanPattern || [] }];
+
+    const r0 = rings[0];
+    const n = customN ?? r0.steps;
+    const k = Math.min(n, customK ?? r0.pulses);
+    const { steps: mergeSteps, pattern: basePat } = bjorklundSteps(k, n);
+    const r0Rot = r0.rotation || 0;
+    const r0Pattern = customK === null && customN === null && r0.pattern.length === n
+      ? r0.pattern
+      : rotatePattern(basePat, r0Rot);
 
     const tempo = score.params?.tempo || 60;
     const stepDuration = (60 / tempo) * 0.25;
@@ -42,7 +50,10 @@ export function createEuclideanSim() {
 
     ctx.fillStyle = '#e8e2f0';
     ctx.font = 'bold 14px system-ui, sans-serif';
-    ctx.fillText(`● Bjorklund Euclidean Rhythm — E(${k}, ${n})`, 16, 26);
+    const ringSummary = rings.length > 1
+      ? `Polyrhythm (${rings.map(r => `E(${r.pulses},${r.steps})`).join(' + ')})`
+      : `E(${k}, ${n}) rot=${r0Rot}`;
+    ctx.fillText(`● Bjorklund Euclidean Rhythm — ${ringSummary}`, 16, 26);
 
     const splitX = width > 560 ? width * 0.54 : width;
 
@@ -112,13 +123,13 @@ export function createEuclideanSim() {
     ctx.arc(wheelCenterX, wheelCenterY, radius, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Polygon connecting hits
+    // Polygon connecting hits (outer ring)
     const hitCoords = [];
     for (let i = 0; i < n; i++) {
       const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
       const px = wheelCenterX + Math.cos(ang) * radius;
       const py = wheelCenterY + Math.sin(ang) * radius;
-      if (pattern[i]) hitCoords.push({ x: px, y: py });
+      if (r0Pattern[i]) hitCoords.push({ x: px, y: py });
     }
     if (hitCoords.length > 2) {
       ctx.strokeStyle = 'rgba(160, 240, 120, 0.45)';
@@ -144,30 +155,57 @@ export function createEuclideanSim() {
     );
     ctx.stroke();
 
-    // Step dots
-    for (let i = 0; i < n; i++) {
-      const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
-      const px = wheelCenterX + Math.cos(ang) * radius;
-      const py = wheelCenterY + Math.sin(ang) * radius;
-      const isHit = pattern[i];
-      const isCurrent = i === currentStep;
-      const isHl = hoveredTarget?.algorithm === 'bjorklund' && (hoveredTarget.step % n) === i;
-      const r = isHit ? (isCurrent ? 10 : 7) : (isCurrent ? 6 : 4);
+    // Draw outer ring (Ring 1) plus any inner polyrhythm rings (Rings 2 & 3)
+    const drawRingSet = [
+      { steps: n, pulses: k, pattern: r0Pattern, rad: radius, color: RING_COLORS[0] },
+      ...rings.slice(1).map((rg, idx) => ({
+        steps: rg.steps,
+        pulses: rg.pulses,
+        pattern: rg.pattern,
+        rad: radius * (0.72 - idx * 0.22),
+        color: RING_COLORS[(idx + 1) % RING_COLORS.length]
+      }))
+    ];
 
-      ctx.beginPath();
-      ctx.arc(px, py, r, 0, Math.PI * 2);
-      ctx.fillStyle = isHit ? (isCurrent ? '#ffffff' : COLOR) : 'rgba(255,255,255,0.18)';
-      ctx.fill();
+    for (let rIdx = 0; rIdx < drawRingSet.length; rIdx++) {
+      const rg = drawRingSet[rIdx];
+      const rgCycleDur = rg.steps * stepDuration;
+      const rgStep = Math.floor(((currentTime % rgCycleDur) / rgCycleDur) * rg.steps) % rg.steps;
 
-      if (isCurrent || isHl) {
-        ctx.strokeStyle = isHl ? '#ffffff' : COLOR;
-        ctx.lineWidth = 2.5;
+      if (rIdx > 0) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(px, py, r + 4, 0, Math.PI * 2);
+        ctx.arc(wheelCenterX, wheelCenterY, rg.rad, 0, Math.PI * 2);
         ctx.stroke();
       }
 
-      dotBoxes.push({ x: px, y: py, r: 14, step: i });
+      for (let i = 0; i < rg.steps; i++) {
+        const ang = (i / rg.steps) * Math.PI * 2 - Math.PI / 2;
+        const px = wheelCenterX + Math.cos(ang) * rg.rad;
+        const py = wheelCenterY + Math.sin(ang) * rg.rad;
+        const isHit = rg.pattern[i];
+        const isCurrent = i === rgStep;
+        const isHl = rIdx === 0 && hoveredTarget?.algorithm === 'bjorklund' && (hoveredTarget.step % rg.steps) === i;
+        const r = isHit ? (isCurrent ? 9 : 6) : (isCurrent ? 5 : 3.5);
+
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.fillStyle = isHit ? (isCurrent ? '#ffffff' : rg.color) : 'rgba(255,255,255,0.18)';
+        ctx.fill();
+
+        if (isCurrent || isHl) {
+          ctx.strokeStyle = isHl ? '#ffffff' : rg.color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(px, py, r + 4, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        if (rIdx === 0) {
+          dotBoxes.push({ x: px, y: py, r: 14, step: i });
+        }
+      }
     }
 
     // Center summary

@@ -7,7 +7,7 @@
  *   showing the turtle cursor at the active drawing point.
  */
 
-import { lsystem, LSYSTEM_PRESETS, parseLSystemToCommands } from '../algorithms/lsystem.js';
+import { lsystemSafe, LSYSTEM_PRESETS, parseLSystemToCommands } from '../algorithms/lsystem.js';
 import { computeTreeBranches } from '../visuals/tree.js';
 import { ALGORITHMS } from '../algorithms/meta.js';
 
@@ -34,14 +34,20 @@ export function createLSystemSim() {
     branchBoxes = [];
     if (!score) return;
 
-    const presetName = score.params?.lsystemPreset || 'Fern';
+    const lCfg = score.lsystemConfig || score.params?.lsystem || {};
+    const presetName = lCfg.preset || score.params?.lsystemPreset || 'Fern';
     const preset = LSYSTEM_PRESETS[presetName] || LSYSTEM_PRESETS['Fern'];
-    const maxGen = Math.min(score.params?.depth || 4, preset.maxGen || 5);
+    const axiom = lCfg.axiom || preset.axiom;
+    const rules = lCfg.rules || preset.rules;
+    const maxGen = lCfg.generations ?? Math.min(score.params?.depth || 4, preset.maxGen || 5);
     const gen = selectedGen !== null ? Math.min(maxGen, Math.max(0, selectedGen)) : maxGen;
 
-    const str = lsystem(preset.axiom, preset.rules, gen);
+    const safeOut = lsystemSafe(axiom, rules, gen);
+    const str = safeOut.result;
     const commands = parseLSystemToCommands(str);
-    const baseAngle = score.params?.branchAngle || preset.angle;
+    const baseAngle = lCfg.turnAngle ?? score.params?.branchAngle ?? preset.angle;
+    const lengthRatio = lCfg.lengthRatio ?? 0.72;
+    const lineThickness = lCfg.lineThickness ?? 6;
 
     // Progress through commands smoothly synced with currentTime
     const totalCmds = Math.max(1, commands.length);
@@ -71,7 +77,7 @@ export function createLSystemSim() {
     // Show gen 0..gen preview lines
     let gy = 86;
     for (let g = 0; g <= Math.min(gen, 3); g++) {
-      const gStr = lsystem(preset.axiom, preset.rules, g);
+      const gStr = lsystemSafe(axiom, rules, g).result;
       const preview = gStr.length > 34 ? gStr.slice(0, 34) + '…' : gStr;
       ctx.fillStyle = g === gen ? COLOR : '#9e96b0';
       ctx.font = 'bold 13px monospace';
@@ -128,13 +134,14 @@ export function createLSystemSim() {
       treeX,
       treeGroundY,
       treeH,
-      999
+      999,
+      lengthRatio
     );
 
     for (const b of branches) {
       const isHl = hoveredTarget?.algorithm === 'lsystem' && hoveredTarget.index === b.index;
       ctx.strokeStyle = isHl ? '#ffffff' : b.depth === 0 ? '#9c7a64' : COLOR;
-      ctx.lineWidth = isHl ? 3.5 : Math.max(1, 4 - b.depth * 0.6);
+      ctx.lineWidth = isHl ? 3.5 : Math.max(0.8, (lineThickness * 0.65) - b.depth * 0.6);
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(b.x1, b.y1);

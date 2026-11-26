@@ -127,13 +127,26 @@ export function playScore(score, onEvent, options = {}) {
     return;
   }
 
+  const targetDb = volumeToDb(masterVolumeNormalized, -6);
+
+  if (options.smoothCrossfade && isPlaying) {
+    // Gentle 110ms fade-down before rescheduling so parameter edits never click
+    graph.masterVol.volume.rampTo(-60, 0.11);
+    setTimeout(() => {
+      playScore(score, onEvent, { ...options, smoothCrossfade: false, skipFadeIn: false, quickFadeIn: true });
+    }, 115);
+    return;
+  }
+
   stopPlayback({ silentNotify: true });
   currentScore = score;
   onEventCallback = onEvent || null;
 
-  const targetDb = volumeToDb(masterVolumeNormalized, -6);
   if (options.skipFadeIn) {
     graph.masterVol.volume.rampTo(targetDb, 0.25);
+  } else if (options.quickFadeIn) {
+    graph.masterVol.volume.value = -60;
+    graph.masterVol.volume.rampTo(targetDb, 0.32);
   } else {
     // Soft 4-second fade-in on start
     graph.masterVol.volume.value = -60;

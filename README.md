@@ -1,23 +1,23 @@
 # 🌳 Recursive Garden
 
-**Recursive Garden** is an interactive audiovisual meditation where four classical recursive algorithms weave together melody, harmony, rhythm, and living fractal visuals from a single shared seed and clock. Adjust the signature **Depth Dial** (1–8) to hear and watch recursion deepen in real time: the L-system tree grows new generations whose branch angles are shaped by the Nørgård infinity melody, octave-up recursive canons shimmer over warm Tower of Hanoi bass pillars, and a rotating Euclidean ring of fireflies pulses with soft percussion.
+**Recursive Garden** is an interactive audiovisual meditation where four classical recursive algorithms weave together melody, harmony, rhythm, and living fractal visuals from a single shared seed and clock. Open directly in **Split View** (Garden on the left, **Algorithm Lab** on the right) to inspect every recursive call live, customize parameters for each algorithm individually, toggle or solo layers across sound and visuals, and export deterministic 16-bit stereo WAV audio.
 
-> 📸 _Screenshot placeholder: add a screenshot or animated GIF of Recursive Garden (Dusk / X-Ray mode) here before publishing._
+> 📸 _Screenshot placeholder: add a screenshot or animated GIF of Recursive Garden (Split View / X-Ray mode) here before publishing._
 
 ---
 
 ## How the Four Recursive Algorithms Work
 
-Every parameter feeds into pure, deterministic recursive functions in `src/algorithms/` that emit a single timed event **score** (`buildScore`). Live playback, 60fps Canvas 2D visuals, and offline WAV export all consume that exact same score.
+Every parameter feeds into pure, deterministic recursive functions in `src/algorithms/` that emit a single timed event **score** (`buildScore`, safety-capped at `4,000` events). Live playback, 60fps Canvas 2D visuals, Algorithm Lab simulations, and offline WAV export all consume that exact same score.
 
-| Algorithm | Recursive Definition | Musical Role | Visual Role |
+| Algorithm | Recursive Definition | User-Defined Parameters | Musical & Visual Mapping |
 |---|---|---|---|
-| **Nørgård Infinity Series** (`src/algorithms/norgard.js`) | `n(0) = 0`, `n(2k) = -n(k)`, `n(2k+1) = n(k) + 1` (memoized) | **Melody & Recursive Canons:** Values map to quantised scale degrees (`pentatonic`, `lydian`, `dorian`); deeper depth adds faster, quieter octave-up canons. | **Tree Geometry & Glow:** Sets each branch's turn angle so the tree's silhouette *is* the melody; active branches glow as notes sound. |
-| **Tower of Hanoi** (`src/algorithms/hanoi.js`) | `hanoi(n, A, C, B)`: move `n-1` discs to auxiliary peg, move disc `n`, move `n-1` back | **Bass & Pulse:** Target peg selects harmonic interval (`A` root, `B` fifth, `C` octave); larger discs play longer, lower notes. | **Luminous Pillars:** Three glowing pillars at the base with discs arcing smoothly between pegs and ground ripples on impact. |
-| **Euclidean Rhythm / Bjorklund** (`src/algorithms/bjorklund.js`) | Recursively pairs and distributes `k` hit groups across `n` steps (like Euclid's GCD) | **Soft Percussion:** Triggers chimes, brushed pink noise, and gentle wood-like taps distributed across stereo space. | **Firefly Ring:** Orbiting ring of fireflies around the tree connected by an active-hit polygon; each hit flashes its firefly. |
-| **L-System** (`src/algorithms/lsystem.js`) | Recursive string rewriting (`axiom` + `rules` over `generations`, e.g. `F → FF+[+F-F-F]-[-F+F+F]`) | **Texture Density:** Generation depth scales overall harmonic and rhythmic richness via the Depth Dial. | **Hero Tree:** Turtle-graphics tree growing generation by generation, with tip leaves/blossoms, wind sway, and falling petals. |
+| **Nørgård Infinity Series** (`src/algorithms/norgard.js`) | `n(0) = 0`, `n(2k) = -n(k)`, `n(2k+1) = n(k) + d` | Length (`8–256`), start offset (`0–512`), interval step `d` (`1–3`), canon layers (`0–3`), speed ratio (`2×`/`3×`), low/high octave range | **Melody & Tree Angles:** Quantised to `pentatonic`/`lydian`/`dorian`; shapes tree branch angles and glows active branches. |
+| **Tower of Hanoi** (`src/algorithms/hanoi.js`) | `hanoi(n, src, dst, aux)`: move `n-1` to `aux`, move disc `n`, move `n-1` to `dst` (`2^n - 1` moves) | Discs (`2–8`), start & target pegs (`A`/`B`/`C`), custom peg-to-interval mapping, move limit per loop (`3–255`) | **Bass & Pillars:** Disc size controls note length/register; destination peg chooses harmonic interval while discs arc between luminous pillars. |
+| **Euclidean Rhythm / Bjorklund** (`src/algorithms/bjorklund.js`) | Recursively distributes `k` hits evenly across `n` steps (Euclid's GCD) | Polyrhythm rings (`1–3`), per-ring pulses `k` (`1–16`), steps `n` (`2–32`, `k <= n`), rotation (`0..n-1`), accent every `N`th hit | **Soft Percussion & Fireflies:** Brushed noise, wooden taps, and soft chimes synced to an orbiting ring of fireflies and polygon. |
+| **L-System** (`src/algorithms/lsystem.js`) | Recursive string rewriting (`axiom` + validated `rules` over `generations`, safety-capped) | Axiom, editable/addable/deletable production rules (`F, +, -, [, ], X, Y`), generations (`1–8`), turn angle, length ratio, line thickness, leaf density, plus presets | **Hero Tree & Texture Density:** Turtle-graphics tree with wind sway, tip leaves, rain-hit branch dips, and falling petals. |
 
-Enable **X-Ray Mode** (`X` key or toggle in the panel) to inspect the live recursive call labels (`nørgård(i)`, `hanoi: disc d A→C`, `E(k,n)`) and call-stack depth bars directly on screen.
+Use **Algorithm Lab** (or press `X` for **X-Ray Mode**) to view binary derivation trees, Hanoi call stacks, Bjorklund step-by-step merges, turtle cursor rewriting, step-by-step audio playback (`⏮`/`⏭ Step`), and linked Garden ↔ Lab hover highlighting.
 
 ---
 
@@ -42,12 +42,12 @@ npm run preview
 
 ---
 
-## Exporting Audio (WAV) & Parameters
+## Exporting Audio (WAV) & Sharing Parameters
 
-1. Click **Begin** to enter the garden and customize your seed, depth, scale, tempo, or preset.
-2. In the **Export Composition** section of the control panel, choose a duration (**30 seconds**, **1 minute**, or **3 minutes**).
-3. Click **⬇ Download WAV** to render the score offline via `Tone.Offline` using the identical synth voices, convolution reverb (plus a 6-second reverb tail), stereo delay, ambient layers, and `-3 dB` limiter — encoded as a deterministic 16-bit stereo PCM WAV (`recursive-garden-<seed>-<depth>.wav`).
-4. Click **📄 JSON** next to it to save the exact composition parameters (`recursive-garden-<seed>-<depth>.json`), or click **🔗 Copy Share Link** to encode parameters into the URL hash.
+1. Click **Begin** to enter **Split View** (Garden + Algorithm Lab) and customize global or per-algorithm recursion parameters, instrument timbres, and rain intensity.
+2. In the **Export Composition** section of the control drawer (`☰ Controls`), choose **30 seconds**, **1 minute**, or **3 minutes**.
+3. Click **⬇ Download WAV** to render the exact score and all active parameters offline via `Tone.Offline` with a 6-second reverb tail — saved as `recursive-garden-<seed>-<depth>.wav`.
+4. Click **📄 JSON** to export all parameters (`recursive-garden-<seed>-<depth>.json`), **📂 Load** to restore any saved JSON configuration, or **🔗 Copy Share Link** to encode every parameter in the URL hash.
 
 ---
 
@@ -59,32 +59,47 @@ EKTARA-/
 │   └── prompt-log.md          # Complete verbatim prompt & response history
 ├── src/
 │   ├── algorithms/
-│   │   ├── bjorklund.js       # Recursive Euclidean rhythm distribution + rotation
+│   │   ├── bjorklund.js       # Recursive Euclidean rhythm, merge steps, validation
 │   │   ├── hanoi.js           # Recursive Tower of Hanoi move generator
-│   │   ├── lsystem.js         # Recursive L-system rewriting + presets + parser
-│   │   ├── norgard.js         # Memoized Nørgård infinity series
+│   │   ├── lsystem.js         # Recursive rewriting, symbol validation & safety cap
+│   │   ├── meta.js            # Canonical algorithm colors, shapes & step captions
+│   │   ├── norgard.js         # Memoized generalised Nørgård series (d = 1..3)
+│   │   ├── params.js          # Parameter schema, normalizer, presets & randomiser
 │   │   ├── prng.js            # Mulberry32 deterministic seeded PRNG
-│   │   ├── scales.js          # Scale degree → MIDI / frequency mapping
-│   │   └── score.js           # Unified score builder combining all 4 algorithms
+│   │   ├── scales.js          # Scale degree → MIDI, octave clamping, frequencies
+│   │   └── score.js           # Unified score builder with 4,000-event safety cap
 │   ├── audio/
-│   │   ├── engine.js          # Live Tone.js playback, loops, Evolve, sleep timer
+│   │   ├── engine.js          # Live Tone.js playback, smooth crossfade, step preview
 │   │   ├── export.js          # Offline Tone.Offline render + 16-bit stereo WAV encoder
-│   │   └── graph.js           # Shared Tone.js synth/effects graph for live & export parity
+│   │   ├── graph.js           # Shared synth/effects chain for live & export parity
+│   │   ├── instruments.js     # Glass Bell, Music Box, Kalimba, Singing Bowl, Bass, Pad, Perc
+│   │   └── rain.js            # Layered procedural stereo rain + droplets + thunder
+│   ├── lab/
+│   │   ├── labController.js   # Selector cards, On/Off, Solo, embedded editors & step mode
+│   │   ├── simEuclidean.js    # Bjorklund step-by-step merge & sweeping rhythm wheel
+│   │   ├── simHanoi.js        # 3-peg animation & recursive call tree
+│   │   ├── simLSystem.js      # Generation scrubber, colored symbols & turtle cursor
+│   │   ├── simNorgard.js      # Binary derivation tree, tiles & self-similarity contour
+│   │   └── timelineStrip.js   # "What You Hear" 4-lane scrolling piano roll
 │   ├── ui/
-│   │   └── controls.js        # Collapsible translucent panel, presets, accessibility
+│   │   ├── controls.js        # Collapsible control drawer, presets, JSON import/export
+│   │   └── paramEditors.js    # Shared per-algorithm parameter editors & rule validator
 │   ├── visuals/
-│   │   ├── atmosphere.js      # Gradient sky, twinkling stars, mist, ground, vignette
+│   │   ├── atmosphere.js      # Sky darkening, stars, rain ground mist, vignette
 │   │   ├── fireflies.js       # Euclidean firefly ring & polygon
-│   │   ├── hanoi.js           # Pillars, disc arcs, landing ripples
-│   │   ├── renderer.js        # 60fps Canvas 2D orchestrator synced to audio clock
+│   │   ├── hanoi.js           # Luminous pillars, disc arcs & landing ripples
+│   │   ├── rain.js            # 3-layer pooled rainfall (1500 max), splashes & canopy glints
+│   │   ├── renderer.js        # 60fps Canvas 2D orchestrator & linked hover hit-testing
 │   │   ├── themes.js          # Dusk, Moss, Moonlight, and Ember palettes
-│   │   ├── tree.js            # Normalized L-system tree, glow, wind sway, petals
+│   │   ├── tree.js            # Normalized L-system tree, glow, wind sway & petals
 │   │   └── xray.js            # Recursion X-Ray overlay
-│   ├── main.js                # Entry point, welcome flow, URL hash state, wheel zoom
-│   └── styles.css             # Responsive & accessible dark-mode UI styles
+│   ├── main.js                # Entry point, 150ms debounced updates, view switcher
+│   └── styles.css             # Responsive Split/Lab/Garden & accessible UI styles
 ├── tests/
-│   ├── algorithms.test.js     # 39 unit & depth 1–8 stress tests
-│   └── export.test.js         # 5 WAV encoder & JSON export tests
+│   ├── algorithms.test.js     # Core math, validation, safety cap & depth 1–8 tests
+│   ├── export.test.js         # WAV encoder, filenames & JSON export tests
+│   ├── rain.test.js           # Rain particle pool & audio parameter tests
+│   └── sound.test.js          # Timbre & seeded humanisation tests
 ├── index.html
 ├── package.json
 ├── vite.config.js

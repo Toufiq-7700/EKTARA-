@@ -14,35 +14,11 @@ import { SCALES } from '../algorithms/scales.js';
 import { THEMES } from '../visuals/themes.js';
 import { createPRNG } from '../algorithms/prng.js';
 import { TIMBRE_OPTIONS, DEFAULT_TIMBRES } from '../audio/instruments.js';
+import { ALGORITHMS, ALGORITHM_ORDER } from '../algorithms/meta.js';
+import { GARDEN_PRESETS, applyDepthToParams, normalizeParams } from '../algorithms/params.js';
+import { renderAlgorithmFields, bindAlgorithmEditor } from './paramEditors.js';
 
-// ─── Preset configurations ──────────────────────────────────────
-
-const PRESETS = {
-  'Quiet Forest': {
-    seed: 42, depth: 3, scale: 'pentatonic', rootNote: 60,
-    tempo: 50, branchAngle: 25, densityEuclid: 0.7,
-    lsystemPreset: 'Fern', theme: 'Moss', ambient: 'wind',
-    rainIntensity: 0.15, thunderEnabled: true
-  },
-  'Moonlit Pond': {
-    seed: 137, depth: 5, scale: 'lydian', rootNote: 67,
-    tempo: 45, branchAngle: 22, densityEuclid: 0.5,
-    lsystemPreset: 'Wispy Bush', theme: 'Moonlight', ambient: 'rain',
-    rainIntensity: 0.55, thunderEnabled: true
-  },
-  'Deep Dream': {
-    seed: 256, depth: 7, scale: 'dorian', rootNote: 55,
-    tempo: 40, branchAngle: 30, densityEuclid: 1.5,
-    lsystemPreset: 'Canopy', theme: 'Dusk', ambient: 'wind',
-    rainIntensity: 0.75, thunderEnabled: true
-  },
-  'Morning Light': {
-    seed: 88, depth: 4, scale: 'pentatonic', rootNote: 72,
-    tempo: 65, branchAngle: 20, densityEuclid: 1.0,
-    lsystemPreset: 'Binary Tree', theme: 'Ember', ambient: 'none',
-    rainIntensity: 0, thunderEnabled: false
-  }
-};
+const PRESETS = GARDEN_PRESETS;
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -55,13 +31,13 @@ const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
  */
 export function buildUI(container, callbacks) {
   const {
-    getParams, setParams, rebuildAndPlay, saveParamsToHash,
+    getParams, getScore, setParams, onDebouncedParamsChange, rebuildAndPlay, saveParamsToHash,
     pausePlayback, resumePlayback, stopPlayback,
     setMasterVolume, setLayerVolume, setLayerMute,
     setSleepTimer, setEvolve, setAmbientType,
     setRainIntensityLevel, setThunderMode, setLayerTimbre,
     setCurrentTheme, toggleXRay, setZoomLevel,
-    exportWav, exportJson, setPlaybackStateListener
+    exportWav, exportJson, importJsonParams, setPlaybackStateListener
   } = callbacks;
 
   let panelVisible = true;
@@ -213,6 +189,22 @@ export function buildUI(container, callbacks) {
           </label>
         </div>
 
+        <!-- Recursion Parameters (mirrored with Algorithm Lab) -->
+        <details class="control-group recursion-params-panel" open aria-label="Recursion Parameters">
+          <summary>Recursion Parameters</summary>
+          <p class="control-hint">User-defined parameters per algorithm (live synced with Lab)</p>
+          <p id="drawer-cap-notice" class="alg-cap-warning" role="status" style="display:none;"></p>
+          ${ALGORITHM_ORDER.map(id => {
+            const m = ALGORITHMS[id];
+            return `
+              <details class="drawer-alg-section" ${id === 'norgard' ? 'open' : ''}>
+                <summary style="color:${m.color};">${m.shape} ${m.title}</summary>
+                <div class="drawer-alg-editor" data-drawer-editor="${id}"></div>
+              </details>
+            `;
+          }).join('')}
+        </details>
+
         <!-- Sound Panel (Timbre selector per layer) -->
         <details class="control-group sound-panel" open aria-label="Sound timbres">
           <summary>Sound — Instrument Timbres</summary>
@@ -323,6 +315,8 @@ export function buildUI(container, callbacks) {
           <div class="export-actions">
             <button id="download-btn" class="download-btn" aria-label="Download WAV audio">⬇ Download WAV</button>
             <button id="download-json-btn" class="download-btn secondary" aria-label="Export parameters JSON" title="Download parameters as JSON">📄 JSON</button>
+            <button id="load-json-btn" class="download-btn secondary" aria-label="Load parameters JSON" title="Load parameters from JSON">📂 Load</button>
+            <input type="file" id="load-json-input" accept=".json,application/json" style="display:none;" aria-label="Choose JSON parameter file" />
           </div>
           <div id="export-progress" class="export-progress" style="display:none;" role="status" aria-live="polite">
             <div id="export-bar" class="export-bar"></div>
@@ -403,13 +397,14 @@ export function buildUI(container, callbacks) {
     container.querySelector('#master-vol-val').textContent = masterVolSlider.value + '%';
   });
 
-  // Depth Dial
+  // Depth Dial — scales coupled depth defaults across all 4 algorithms smoothly
   const depthDial = container.querySelector('#depth-dial');
   depthDial.addEventListener('input', () => {
-    setParams({ depth: parseInt(depthDial.value) });
-    container.querySelector('#depth-val').textContent = depthDial.value;
+    const newDepth = parseInt(depthDial.value, 10);
+    container.querySelector('#depth-val').textContent = String(newDepth);
+    const updated = applyDepthToParams(getParams(), newDepth);
+    onDebouncedParamsChange(updated);
   });
-  depthDial.addEventListener('change', applyAndRebuild);
 
   // Seed
   const seedInput = container.querySelector('#seed-input');
@@ -451,28 +446,51 @@ export function buildUI(container, callbacks) {
   // Branch angle
   const angleSlider = container.querySelector('#angle-slider');
   angleSlider.addEventListener('input', () => {
-    container.querySelector('#angle-val').textContent = angleSlider.value + '°';
-  });
-  angleSlider.addEventListener('change', () => {
-    setParams({ branchAngle: parseInt(angleSlider.value) });
-    applyAndRebuild();
+    const val = Number(angleSlider.value);
+    container.querySelector('#angle-val').textContent = val + '°';
+    const cur = getParams();
+    onDebouncedParamsChange({
+      ...cur,
+      branchAngle: val,
+      lsystem: { ...cur.lsystem, turnAngle: val }
+    });
   });
 
   // Euclidean density
   const densitySlider = container.querySelector('#density-slider');
   densitySlider.addEventListener('input', () => {
-    const val = (densitySlider.value / 100).toFixed(1);
-    container.querySelector('#density-val').textContent = val + '×';
-  });
-  densitySlider.addEventListener('change', () => {
-    setParams({ densityEuclid: densitySlider.value / 100 });
-    applyAndRebuild();
+    const density = densitySlider.value / 100;
+    container.querySelector('#density-val').textContent = density.toFixed(1) + '×';
+    const cur = getParams();
+    const r0 = cur.euclid.rings[0];
+    const pulses = Math.max(1, Math.min(r0.steps, Math.round((2 + cur.depth) * density)));
+    const nextRings = cur.euclid.rings.map((r, i) => (i === 0 ? { ...r, pulses } : r));
+    onDebouncedParamsChange({
+      ...cur,
+      densityEuclid: density,
+      euclid: { ...cur.euclid, rings: nextRings }
+    });
   });
 
   // L-system preset
   container.querySelector('#lsystem-select').addEventListener('change', (e) => {
-    setParams({ lsystemPreset: e.target.value });
-    applyAndRebuild();
+    const presetName = e.target.value;
+    const pr = LSYSTEM_PRESETS[presetName];
+    if (!pr) return;
+    const cur = getParams();
+    onDebouncedParamsChange({
+      ...cur,
+      lsystemPreset: presetName,
+      branchAngle: pr.angle,
+      lsystem: {
+        ...cur.lsystem,
+        preset: presetName,
+        axiom: pr.axiom,
+        rules: { ...pr.rules },
+        turnAngle: pr.angle,
+        generations: Math.min(pr.maxGen || 5, cur.lsystem.generations)
+      }
+    });
   });
 
   // Theme
@@ -580,13 +598,20 @@ export function buildUI(container, callbacks) {
       const preset = PRESETS[presetName];
       if (!preset) return;
 
-      setParams(preset);
-      updateControlsFromParams(preset);
-      setCurrentTheme(preset.theme);
-      setAmbientType(preset.ambient);
-      setRainIntensityLevel?.(preset.rainIntensity ?? 0);
-      setThunderMode?.(preset.thunderEnabled ?? true);
+      const normalized = normalizeParams(preset);
+      setParams(normalized);
+      updateControlsFromParams(normalized);
+      setCurrentTheme(normalized.theme);
+      setAmbientType(normalized.ambient);
+      setRainIntensityLevel?.(normalized.rainIntensity ?? 0);
+      setThunderMode?.(normalized.thunderEnabled ?? true);
+      if (normalized.timbres) {
+        for (const [layer, timbre] of Object.entries(normalized.timbres)) {
+          setLayerTimbre?.(layer, timbre);
+        }
+      }
       applyAndRebuild();
+      renderAllDrawerEditors(true);
     });
   });
 
@@ -658,6 +683,67 @@ export function buildUI(container, callbacks) {
     });
   }
 
+  const loadJsonBtn = container.querySelector('#load-json-btn');
+  const loadJsonInput = container.querySelector('#load-json-input');
+  if (loadJsonBtn && loadJsonInput && importJsonParams) {
+    loadJsonBtn.addEventListener('click', () => loadJsonInput.click());
+    loadJsonInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const loaded = importJsonParams(parsed.params || parsed);
+        updateControlsFromParams(loaded);
+        renderAllDrawerEditors(true);
+        exportStatus.classList.remove('error');
+        exportStatus.textContent = `Loaded ${file.name}`;
+      } catch (err) {
+        exportStatus.classList.add('error');
+        exportStatus.textContent = 'Invalid JSON parameter file.';
+      } finally {
+        loadJsonInput.value = '';
+      }
+    });
+  }
+
+  // ─── Mirrored Recursion Parameter Editors in Drawer ─────
+  function renderDrawerEditor(algId, force = false) {
+    const host = container.querySelector(`[data-drawer-editor="${algId}"]`);
+    if (!host) return;
+    if (!force && host.contains(document.activeElement)) {
+      const statsEl = host.querySelector('.alg-stats-line');
+      const statsText = getScore?.()?.stats?.[algId === 'bjorklund' ? 'euclid' : algId];
+      if (statsEl && statsText) statsEl.textContent = statsText;
+      return;
+    }
+    host.innerHTML = renderAlgorithmFields(algId, getParams(), getScore?.()?.stats);
+    bindAlgorithmEditor(host, algId, {
+      getParams,
+      onUpdateParams: (nextParams, { rerenderSelf }) => {
+        onDebouncedParamsChange(nextParams);
+        if (rerenderSelf) renderDrawerEditor(algId, true);
+      }
+    });
+  }
+
+  function renderAllDrawerEditors(force = false) {
+    for (const id of ALGORITHM_ORDER) {
+      renderDrawerEditor(id, force);
+    }
+    const notice = container.querySelector('#drawer-cap-notice');
+    const capMsg = getScore?.()?.stats?.capNotice;
+    if (notice) {
+      if (capMsg) {
+        notice.textContent = `⚠ ${capMsg}`;
+        notice.style.display = 'block';
+      } else {
+        notice.style.display = 'none';
+      }
+    }
+  }
+  renderAllDrawerEditors(true);
+
   // Keep play/pause button synced if sleep timer or stop changes state externally
   if (setPlaybackStateListener) {
     setPlaybackStateListener((state) => {
@@ -722,7 +808,9 @@ export function buildUI(container, callbacks) {
     container.querySelector('#angle-val').textContent = (params.branchAngle || 25) + '°';
     densitySlider.value = Math.round((params.densityEuclid || 1) * 100);
     container.querySelector('#density-val').textContent = (params.densityEuclid || 1).toFixed(1) + '×';
-    container.querySelector('#lsystem-select').value = params.lsystemPreset || 'Fern';
+    const lPreset = params.lsystem?.preset || params.lsystemPreset || 'Fern';
+    const lsSelect = container.querySelector('#lsystem-select');
+    lsSelect.value = LSYSTEM_PRESETS[lPreset] ? lPreset : 'Fern';
     container.querySelector('#theme-select').value = params.theme || 'Dusk';
     container.querySelector('#ambient-select').value = params.ambient || 'wind';
     const rainVal = params.rainIntensity ?? 0.35;
@@ -747,6 +835,10 @@ export function buildUI(container, callbacks) {
 
   return {
     updateControlsFromParams,
+    syncAllFromParams: (p, _score) => {
+      updateControlsFromParams(p);
+      renderAllDrawerEditors(false);
+    },
     updateZoomDisplay,
     show: () => setPanelOpen(true),
     hide: () => setPanelOpen(false)

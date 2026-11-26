@@ -16,12 +16,12 @@ const COLOR = ALGORITHMS.norgard.color;
 /**
  * Build algebraic derivation chain for n(k) down to n(0).
  */
-function buildDerivationChain(k) {
+function buildDerivationChain(k, d = 1) {
   const nodes = [];
   let cur = k;
   let guard = 0;
   while (cur >= 0 && guard < 12) {
-    const val = norgard(cur);
+    const val = norgard(cur, d);
     const kind = cur === 0 ? 'base' : cur % 2 === 0 ? 'even' : 'odd';
     const next = cur === 0 ? -1 : cur % 2 === 0 ? cur / 2 : (cur - 1) / 2;
     nodes.push({ k: cur, val, kind, next });
@@ -32,7 +32,7 @@ function buildDerivationChain(k) {
   return nodes;
 }
 
-function formatEquation(chain) {
+function formatEquation(chain, d = 1) {
   if (!chain || chain.length === 0) return 'n(0) = 0';
   const parts = [];
   for (let i = 0; i < chain.length; i++) {
@@ -42,7 +42,7 @@ function formatEquation(chain) {
     } else if (chain[i - 1].kind === 'even') {
       parts.push(`-n(${c.k})`);
     } else {
-      parts.push(`n(${c.k}) + 1`);
+      parts.push(`n(${c.k}) + ${d}`);
     }
   }
   const finalVal = chain[0].val;
@@ -68,6 +68,7 @@ export function createNorgardSim() {
 
     const activeEvt = melodyEvents[activeIdx];
     const activeK = activeEvt?.meta?.index ?? 0;
+    const dStep = score.params?.norgard?.intervalStep ?? 1;
     const scale = score.params?.scale || 'pentatonic';
     const rootNote = score.params?.rootNote || 60;
 
@@ -76,15 +77,15 @@ export function createNorgardSim() {
     // ─── Section 1: Recursive Tree + Expansion (top 38%) ────────────
     const treeTop = 14;
     const treeH = Math.max(120, height * 0.36);
-    const chain = buildDerivationChain(activeK);
+    const chain = buildDerivationChain(activeK, dStep);
 
     ctx.fillStyle = '#e8e2f0';
     ctx.font = 'bold 14px system-ui, sans-serif';
-    ctx.fillText(`◆ Recursive Call Tree for n(${activeK})`, 16, treeTop + 14);
+    ctx.fillText(`◆ Recursive Call Tree for n(${activeK}) [d = ${dStep}]`, 16, treeTop + 14);
 
     ctx.fillStyle = COLOR;
     ctx.font = '14px monospace';
-    ctx.fillText(formatEquation(chain), 16, treeTop + 36);
+    ctx.fillText(formatEquation(chain, dStep), 16, treeTop + 36);
 
     // Draw recursive binary derivation tree horizontally centered
     const depthCount = Math.min(chain.length, 5);
@@ -130,7 +131,7 @@ export function createNorgardSim() {
         // Rule label on edge
         ctx.fillStyle = '#c8c0d8';
         ctx.font = '12px monospace';
-        const ruleTxt = prev.kind === 'even' ? '2m → -n(m)' : '2m+1 → n(m)+1';
+        const ruleTxt = prev.kind === 'even' ? '2m → -n(m)' : `2m+1 → n(m)+${dStep}`;
         ctx.fillText(ruleTxt, (prevX + x) * 0.5 + 8, (prevY + y) * 0.5);
       }
 
@@ -246,14 +247,15 @@ export function createNorgardSim() {
       ctx.stroke();
     }
 
-    // Half-speed self-similar overlay: n(floor(k/2))
+    // Half-speed self-similar overlay: n(floor(k/2), dStep)
     ctx.save();
     ctx.strokeStyle = 'rgba(255, 233, 179, 0.65)';
     ctx.lineWidth = 1.8;
     ctx.setLineDash([5, 4]);
     ctx.beginPath();
     for (let i = winStart; i < winStart + winLen; i++) {
-      const halfVal = norgard(Math.floor(i / 2));
+      const kIdx = melodyEvents[i]?.meta?.index ?? i;
+      const halfVal = norgard(Math.floor(kIdx / 2), dStep);
       const x = toX(i);
       const y = toY(halfVal);
       if (i === winStart) ctx.moveTo(x, y);

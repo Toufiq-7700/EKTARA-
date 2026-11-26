@@ -14,6 +14,7 @@ import { initAudio, playScore, pausePlayback, resumePlayback, stopPlayback,
          getAudioMixSettings, setPlaybackStateListener,
          setAlgorithmEnabled, setPlaybackSpeed, previewEvent, setLayerTimbre } from './audio/engine.js';
 import { DEFAULT_TIMBRES } from './audio/instruments.js';
+import { DEFAULT_PARAMS, normalizeParams } from './algorithms/params.js';
 import { exportScoreToWav, exportParamsToJson, triggerBlobDownload } from './audio/export.js';
 import { initVisuals, startVisuals, stopVisuals, updateScore, resizeVisuals,
          setXRay, setZoom, getZoom, onVisualEvent, setTheme,
@@ -24,29 +25,16 @@ import { buildAlgorithmLab } from './lab/labController.js';
 
 // ─── Default parameters (the state) ──────────────────────────────
 
-export const defaultParams = {
-  seed: 42,
-  depth: 4,
-  scale: 'pentatonic',
-  rootNote: 60,
-  tempo: 60,
-  branchAngle: 25,
-  densityEuclid: 1.0,
-  lsystemPreset: 'Fern',
-  theme: 'Dusk',
-  ambient: 'wind',
-  rainIntensity: 0.35,
-  thunderEnabled: true,
-  timbres: { ...DEFAULT_TIMBRES }
-};
+export const defaultParams = DEFAULT_PARAMS;
 
 // Current mutable state
-let currentParams = { ...defaultParams };
+let currentParams = normalizeParams(defaultParams);
 let currentScore = null;
 let evolveEnabled = false;
 let uiHandle = null;
 let labHandle = null;
 let currentViewMode = 'garden';
+let rebuildDebounceTimer = null;
 
 // ─── DOM References ──────────────────────────────────────────────
 
@@ -147,13 +135,15 @@ beginBtn.addEventListener('click', async () => {
 
   // Initialize UI controls
   uiHandle = buildUI(uiOverlay, {
-    getParams, setParams, rebuildAndPlay, saveParamsToHash,
+    getParams, getScore, setParams,
+    onDebouncedParamsChange: scheduleDebouncedParamsUpdate,
+    rebuildAndPlay, saveParamsToHash,
     pausePlayback, resumePlayback, stopPlayback,
     setMasterVolume, setLayerVolume, setLayerMute,
     setSleepTimer, setEvolve: handleSetEvolve, setAmbientType,
     setRainIntensityLevel, setThunderMode, setLayerTimbre,
     setCurrentTheme, toggleXRay, setZoomLevel,
-    exportWav, exportJson, setPlaybackStateListener: (fn) => {
+    exportWav, exportJson, importJsonParams, setPlaybackStateListener: (fn) => {
       setPlaybackStateListener((st) => {
         fn(st);
         labHandle?.syncPlayState(st.isPlaying);
@@ -165,7 +155,7 @@ beginBtn.addEventListener('click', async () => {
   labHandle = buildAlgorithmLab(labPanel, {
     getScore,
     getParams,
-    setParams,
+    onDebouncedParamsChange: scheduleDebouncedParamsUpdate,
     rebuildAndPlay,
     getCurrentTime,
     isAudioPlaying: () => getPlaybackState().isPlaying,
@@ -285,7 +275,7 @@ function loadParamsFromHash() {
   if (!hash) return;
   try {
     const decoded = JSON.parse(decodeURIComponent(hash));
-    currentParams = { ...defaultParams, ...decoded };
+    currentParams = normalizeParams(decoded);
   } catch (e) {
     console.warn('Invalid URL hash params');
   }
@@ -299,23 +289,56 @@ export function saveParamsToHash() {
 // ─── Public API for UI ───────────────────────────────────────────
 
 export function getParams() {
-  return { ...currentParams };
+  return normalizeParams(currentParams);
 }
 
 export function setParams(newParams) {
-  currentParams = { ...currentParams, ...newParams };
+  currentParams = normalizeParams({ ...currentParams, ...newParams });
 }
 
 export function getScore() {
   return currentScore;
 }
 
-export function rebuildAndPlay() {
+export function rebuildAndPlay(options = {}) {
   currentScore = buildScore(currentParams);
   updateScore(currentScore, currentParams.theme);
   labHandle?.onScoreUpdated();
-  playScore(currentScore, onScoreEvent);
+  uiHandle?.syncAllFromParams(currentParams, currentScore);
+  playScore(currentScore, onScoreEvent, options);
   return currentScore;
+}
+
+/**
+ * Debounced (150ms) live update across score, Garden, Lab, URL hash, and audio
+ * with smooth audio crossfade and visual transition.
+ */
+export function scheduleDebouncedParamsUpdate(nextParams) {
+  currentParams = normalizeParams(nextParams);
+  if (rebuildDebounceTimer) clearTimeout(rebuildDebounceTimer);
+  rebuildDebounceTimer = setTimeout(() => {
+    rebuildDebounceTimer = null;
+    rebuildAndPlay({ smoothCrossfade: true });
+    saveParamsToHash();
+  }, 150);
+}
+
+export function importJsonParams(rawObj) {
+  const loaded = normalizeParams(rawObj);
+  currentParams = loaded;
+  setTheme(loaded.theme);
+  setAmbientType(loaded.ambient);
+  setRainIntensityLevel(loaded.rainIntensity ?? 0);
+  setThunderMode(loaded.thunderEnabled ?? true);
+  if (loaded.timbres) {
+    for (const [layer, timbre] of Object.entries(loaded.timbres)) {
+      setLayerTimbre(layer, timbre);
+    }
+  }
+  rebuildAndPlay({ smoothCrossfade: true });
+  saveParamsToHash();
+  labHandle?.syncAllFromParams(currentParams, currentScore);
+  return currentParams;
 }
 
 export function setCurrentTheme(themeName) {

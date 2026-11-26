@@ -18,6 +18,27 @@
  */
 
 /**
+ * Validate user-defined Euclidean parameters (1 <= k <= 16, 2 <= n <= 32, k <= n).
+ * @param {number} pulses - k
+ * @param {number} steps - n
+ * @returns {{ valid: boolean, error: string|null, pulses: number, steps: number }}
+ */
+export function validateEuclideanParams(pulses, steps) {
+  const k = Math.round(Number(pulses));
+  const n = Math.round(Number(steps));
+  if (!Number.isFinite(n) || n < 2 || n > 32) {
+    return { valid: false, error: 'Steps (n) must be between 2 and 32.', pulses: k, steps: n };
+  }
+  if (!Number.isFinite(k) || k < 1 || k > 16) {
+    return { valid: false, error: 'Pulses (k) must be between 1 and 16.', pulses: k, steps: n };
+  }
+  if (k > n) {
+    return { valid: false, error: `Pulses (${k}) cannot exceed steps (${n}).`, pulses: k, steps: n };
+  }
+  return { valid: true, error: null, pulses: k, steps: n };
+}
+
+/**
  * Compute a Euclidean rhythm pattern using the recursive Bjorklund algorithm.
  * 
  * @param {number} pulses - Number of active hits (k)

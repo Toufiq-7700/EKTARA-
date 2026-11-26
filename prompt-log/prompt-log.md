@@ -396,3 +396,63 @@ Fixed the right-side control drawer close button in `src/ui/controls.js` and `sr
 - Verified `npm test` (55/55 passing) and `npm run build` succeed cleanly.
 
 ---
+## Prompt 13: User-Defined Recursion Parameters for All Four Algorithms
+
+### Prompt
+
+The app currently only exposes global controls (Depth Dial, seed, tempo, etc.). The challenge requires USER-DEFINED recursion parameters, so add full parameter control for each of the four algorithms, directly inside each algorithm's card in the Algorithm Lab (and mirrored in the control drawer under a new "Recursion Parameters" section). Everything must update the sound AND the visuals live.
+
+NORGARD (melody):
+- Sequence length (8 to 256 notes)
+- Start index offset (where in the infinite series to begin, 0 to 512)
+- Interval step d: generalise the rule to n(2k+1) = n(k) + d, with d from 1 to 3 (default 1 is the classic infinity series)
+- Canon layers (0 to 3) and the speed ratio between layers (2x or 3x)
+- Register range (low and high octave limits)
+
+HANOI (bass):
+- Number of discs (2 to 8), with a live label showing "2^n - 1 = X moves"
+- Start peg and target peg
+- Peg-to-note mapping: choose intervals for pegs A, B, C (root / fifth / octave / third etc.) from small dropdowns
+- Move limit per loop (so large disc counts stay relaxing and do not become busy)
+
+EUCLIDEAN (rhythm):
+- Pulses k (1 to 16) and steps n (2 to 32), with validation k <= n
+- Rotation (0 to n-1)
+- Accent pattern (accent every Nth hit)
+- Number of rings (1 to 3), each with its own k, n, and rotation for polyrhythm
+
+L-SYSTEM (tree visual):
+- Axiom (text field)
+- Production rules editor: add, edit, and delete rules (e.g. F -> FF+[+F-F-F]-[-F+F+F])
+- Generations (1 to 8), with a live estimate of the command count and an automatic safety cap that shows a clear warning (never freeze the browser)
+- Turn angle, length ratio per generation, line thickness, and leaf density
+- Keep the existing presets (Fern, Binary Tree, Wispy Bush, Canopy) as one-click starting points that fill the fields, which the user can then edit
+- Validate the rules (only allowed symbols F, +, -, [, ], X, Y) and show a friendly inline error instead of breaking
+
+GENERAL REQUIREMENTS:
+- Every parameter has a slider or number input with a plain-English tooltip, a live value readout, and a "Reset to default" button per algorithm, plus a "Randomise" button (seeded) per algorithm
+- Changes are debounced (about 150 ms) and the score, Lab simulations, and Garden visuals rebuild smoothly with a crossfade, with no audio clicks (ramp the volume)
+- Show small live stats under each algorithm (e.g. "Hanoi: 5 discs, 31 moves", "Euclidean: 5 of 8, rotation 2", "L-system: generation 4, 1,240 commands")
+- All parameters must be: included in the URL share hash, saved and loaded by the JSON export, part of every preset, and used by the Tone.Offline WAV export (so the exported file reflects the chosen parameters)
+- Keep everything deterministic from the seed, and keep notes quantised to the chosen scale so any parameter combination still sounds relaxing
+- Safety limits: cap total score events (e.g. 4,000) and show a gentle notice when a setting hits the cap
+- Keyboard accessible, labelled inputs (ARIA), and min 14px text
+
+Add Vitest tests for: generalised Norgard with d=1 matching the classic values, Hanoi move counts for 2 to 8 discs, Euclidean validation and rotation, L-system rule validation errors, and the event cap. Make sure npm test and npm run build pass. Update the prompt log and README.
+
+### Response
+
+Implemented full user-defined per-algorithm recursion parameters across the algorithms, score builder, Garden visuals, Algorithm Lab cards, Control Drawer, JSON export/import, URL hash sharing, and Tone.Offline WAV export:
+- **Canonical Parameter Schema & Presets (`src/algorithms/params.js`)**: Defined `DEFAULT_PARAMS`, `normalizeParams`, `applyDepthToParams`, `resetAlgorithmParams`, `randomiseAlgorithmParams`, and `GARDEN_PRESETS` containing all per-algorithm parameters.
+- **Pure Algorithms & 4,000-Event Safety Cap (`norgard.js`, `hanoi.js`, `bjorklund.js`, `lsystem.js`, `scales.js`, `score.js`)**:
+  - Generalised `norgard(k, d)` with `d ∈ [1, 3]` and start `offset ∈ [0, 512]`, `canonLayers (0–3)`, `speedRatio (2×/3×)`, and `clampMidiToOctaves`.
+  - Hanoi `discs (2–8)`, `startPeg`/`targetPeg`, custom `pegIntervals`, and `moveLimit`.
+  - Polyrhythmic Euclidean `ringsCount (1–3)` with `validateEuclideanParams` (`1 <= k <= 16`, `2 <= n <= 32`, `k <= n`), `rotation`, and `accentEvery`.
+  - User-editable L-system `axiom` + `rules` validated via `validateLSystem` (allowed `F, +, -, [, ], X, Y`) and `lsystemSafe` early safety cap + command estimate, plus `turnAngle`, `lengthRatio`, `lineThickness`, and `leafDensity`.
+  - Enforced `MAX_SCORE_EVENTS = 4000` in `buildScore()` with `score.stats` and cap notices.
+- **Shared Editors, Lab Cards, Mirrored Drawer & 150ms Smooth Crossfade (`src/ui/paramEditors.js`, `src/lab/labController.js`, `src/ui/controls.js`, `src/main.js`, `src/audio/engine.js`)**:
+  - Embedded parameter editors, live stats, Reset, and seeded Randomise buttons inside each Lab card and mirrored them under "Recursion Parameters" in the Control Drawer.
+  - Added `150ms` debounced `scheduleDebouncedParamsUpdate` with smooth audio ramp crossfade (`smoothCrossfade`) and visual scene crossfade, plus `📂 Load` JSON parameter import alongside `📄 JSON` export.
+- **Tests, Build & Docs (`tests/algorithms.test.js`, `README.md`)**: Added Vitest tests for generalised Nørgård `d=1..3` & offset, Hanoi `2..8` disc move counts, Euclidean validation, L-system symbol validation & safety cap, and the 4,000-event cap. Verified `npm test` and `npm run build` pass.
+
+---

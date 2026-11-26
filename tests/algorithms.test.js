@@ -6,10 +6,11 @@
 import { describe, it, expect } from 'vitest';
 import { norgard, norgardSequence, clearNorgardCache } from '../src/algorithms/norgard.js';
 import { hanoi, hanoiMoveCount } from '../src/algorithms/hanoi.js';
-import { bjorklund, bjorklundSteps, rotatePattern } from '../src/algorithms/bjorklund.js';
+import { bjorklund, bjorklundSteps, rotatePattern, validateEuclideanParams } from '../src/algorithms/bjorklund.js';
 import { formatEventCaption } from '../src/algorithms/meta.js';
-import { lsystem, LSYSTEM_PRESETS } from '../src/algorithms/lsystem.js';
+import { lsystem, lsystemSafe, validateLSystem, LSYSTEM_PRESETS } from '../src/algorithms/lsystem.js';
 import { buildScore } from '../src/algorithms/score.js';
+import { MAX_SCORE_EVENTS } from '../src/algorithms/params.js';
 import { degreeToMidi, midiToFreq } from '../src/algorithms/scales.js';
 import { createPRNG } from '../src/algorithms/prng.js';
 
@@ -47,6 +48,15 @@ describe('Nørgård Infinity Series', () => {
 
   it('throws for negative index', () => {
     expect(() => norgard(-1)).toThrow();
+  });
+
+  it('generalised Nørgård with d=1 matches classic values and supports d>1 and offset', () => {
+    clearNorgardCache();
+    expect(norgardSequence(8, 0, 1)).toEqual([0, 1, -1, 2, 1, 0, -2, 3]);
+    // With d=2: n(0)=0, n(1)=2, n(2)=-2, n(3)=4, ...
+    expect(norgardSequence(4, 0, 2)).toEqual([0, 2, -2, 4]);
+    // Offset slice matches subsequence
+    expect(norgardSequence(4, 3, 1)).toEqual([2, 1, 0, -2]);
   });
 });
 
@@ -87,6 +97,14 @@ describe('Tower of Hanoi', () => {
     const moves = hanoi(4);
     for (let i = 0; i < moves.length; i++) {
       expect(moves[i].step).toBe(i);
+    }
+  });
+
+  it('produces exact 2^n - 1 move counts for 2 to 8 discs and supports custom start/target pegs', () => {
+    for (let discs = 2; discs <= 8; discs++) {
+      const expected = Math.pow(2, discs) - 1;
+      expect(hanoiMoveCount(discs)).toBe(expected);
+      expect(hanoi(discs, 'B', 'A')).toHaveLength(expected);
     }
   });
 });
@@ -131,6 +149,15 @@ describe('Bjorklund Euclidean Rhythm', () => {
     expect(steps[0].map(g => g.join(''))).toEqual(['x', 'x', 'x', '.', '.', '.', '.', '.']);
     expect(pattern).toEqual(bjorklund(3, 8));
   });
+
+  it('validates Euclidean pulses and steps bounds (k <= n, 1<=k<=16, 2<=n<=32)', () => {
+    expect(validateEuclideanParams(5, 8).valid).toBe(true);
+    expect(validateEuclideanParams(9, 8).valid).toBe(false);
+    expect(validateEuclideanParams(0, 8).valid).toBe(false);
+    expect(validateEuclideanParams(2, 1).valid).toBe(false);
+    expect(validateEuclideanParams(17, 24).valid).toBe(false);
+    expect(validateEuclideanParams(4, 33).valid).toBe(false);
+  });
 });
 
 // ─── L-System ─────────────────────────────────────────────────────
@@ -167,6 +194,24 @@ describe('L-System', () => {
       expect(preset.rules).toBeDefined();
       expect(preset.angle).toBeGreaterThan(0);
     }
+  });
+
+  it('validates allowed L-system symbols and catches rule errors cleanly', () => {
+    expect(validateLSystem('F', { F: 'F[+F]-F' }).valid).toBe(true);
+    const badSym = validateLSystem('FZ', { F: 'FF' });
+    expect(badSym.valid).toBe(false);
+    expect(badSym.errors[0]).toContain('Invalid symbol');
+
+    const badRule = validateLSystem('F', { F: 'FF+1' });
+    expect(badRule.valid).toBe(false);
+
+    const emptyAx = validateLSystem('', { F: 'FF' });
+    expect(emptyAx.valid).toBe(false);
+
+    // Explosive rule at gen 8 triggers safety cap without hanging
+    const safe = lsystemSafe('F', { F: 'FF+[+F-F-F]-[-F+F+F]' }, 8);
+    expect(safe.capped).toBe(true);
+    expect(safe.estimatedCommands).toBeLessThanOrEqual(12000);
   });
 });
 
@@ -245,6 +290,27 @@ describe('Score Builder', () => {
     expect(formatEventCaption(nEvt)).toContain('Nørgård(');
     expect(formatEventCaption(hEvt)).toContain('Hanoi move');
     expect(formatEventCaption(bEvt)).toContain('Euclidean E(');
+  });
+
+  it('enforces the MAX_SCORE_EVENTS (4000) safety cap with a clear cap notice', () => {
+    const heavy = buildScore({
+      seed: 42,
+      depth: 8,
+      norgard: { length: 256, offset: 0, intervalStep: 1, canonLayers: 3, speedRatio: 3, lowOctave: 3, highOctave: 6 },
+      hanoi: { discs: 8, startPeg: 'A', targetPeg: 'C', pegIntervals: { A: 0, B: 7, C: 12 }, moveLimit: 255 },
+      euclid: {
+        ringsCount: 3,
+        accentEvery: 2,
+        rings: [
+          { pulses: 16, steps: 16, rotation: 0 },
+          { pulses: 16, steps: 16, rotation: 0 },
+          { pulses: 16, steps: 16, rotation: 0 }
+        ]
+      }
+    });
+    expect(heavy.events.length).toBeLessThanOrEqual(MAX_SCORE_EVENTS);
+    expect(heavy.stats.capped).toBe(true);
+    expect(heavy.stats.capNotice).toContain('4,000');
   });
 });
 

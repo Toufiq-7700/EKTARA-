@@ -87,7 +87,99 @@ export const LSYSTEM_PRESETS = {
   }
 };
 
-const MAX_COMMANDS = 12000;
+export const ALLOWED_LSYSTEM_SYMBOLS = new Set(['F', '+', '-', '[', ']', 'X', 'Y']);
+export const MAX_LSYSTEM_CHARS = 60000;
+export const MAX_COMMANDS = 12000;
+
+/**
+ * Validate an L-system axiom and production rules.
+ * Only symbols F, +, -, [, ], X, Y (and whitespace) are allowed.
+ *
+ * @param {string} axiom
+ * @param {Object<string, string>} rules
+ * @returns {{ valid: boolean, errors: string[] }}
+ */
+export function validateLSystem(axiom, rules) {
+  const errors = [];
+  const cleanAxiom = typeof axiom === 'string' ? axiom.replace(/\s+/g, '') : '';
+  if (!cleanAxiom) {
+    errors.push('Axiom cannot be empty.');
+  } else {
+    for (const ch of cleanAxiom) {
+      if (!ALLOWED_LSYSTEM_SYMBOLS.has(ch)) {
+        errors.push(`Invalid symbol "${ch}" in axiom. Allowed: F, +, -, [, ], X, Y.`);
+        break;
+      }
+    }
+  }
+
+  if (!rules || typeof rules !== 'object' || Object.keys(rules).length === 0) {
+    errors.push('At least one production rule is required.');
+  } else {
+    for (const [lhs, rhs] of Object.entries(rules)) {
+      if (!lhs || lhs.length !== 1 || !ALLOWED_LSYSTEM_SYMBOLS.has(lhs)) {
+        errors.push(`Rule key "${lhs}" must be a single allowed symbol (F, X, Y, +, -, [, ]).`);
+      }
+      const cleanRhs = typeof rhs === 'string' ? rhs.replace(/\s+/g, '') : '';
+      if (!cleanRhs) {
+        errors.push(`Rule for "${lhs}" cannot be empty.`);
+      } else {
+        for (const ch of cleanRhs) {
+          if (!ALLOWED_LSYSTEM_SYMBOLS.has(ch)) {
+            errors.push(`Invalid symbol "${ch}" in rule ${lhs} → ${rhs}. Allowed: F, +, -, [, ], X, Y.`);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Safely rewrite an L-system up to `generations`, capping string length at
+ * `MAX_LSYSTEM_CHARS` so exponential rules never freeze the browser.
+ */
+export function lsystemSafe(axiom, rules, generations, maxChars = MAX_LSYSTEM_CHARS) {
+  let current = (axiom || 'F').replace(/\s+/g, '');
+  let capped = false;
+  let actualGenerations = 0;
+
+  for (let g = 0; g < generations; g++) {
+    let next = '';
+    for (const ch of current) {
+      const rep = rules[ch] !== undefined ? rules[ch].replace(/\s+/g, '') : ch;
+      if (next.length + rep.length > maxChars) {
+        capped = true;
+        break;
+      }
+      next += rep;
+    }
+    if (capped) break;
+    current = next;
+    actualGenerations = g + 1;
+  }
+
+  let commandCount = 0;
+  for (const ch of current) {
+    if (ch === 'F' || ch === '+' || ch === '-' || ch === '[' || ch === ']') {
+      commandCount++;
+    }
+  }
+  if (commandCount > MAX_COMMANDS) capped = true;
+
+  return {
+    result: current,
+    capped,
+    actualGenerations,
+    estimatedCommands: Math.min(commandCount, MAX_COMMANDS),
+    rawCommands: commandCount,
+    warning: capped
+      ? `Safety cap reached at generation ${actualGenerations} (${Math.min(commandCount, MAX_COMMANDS).toLocaleString()} commands max) to keep 60fps.`
+      : null
+  };
+}
 
 /**
  * Parse an L-system string into turtle graphics instructions.

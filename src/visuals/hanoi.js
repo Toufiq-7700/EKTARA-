@@ -11,16 +11,18 @@
  * @param {number} numDiscs - Number of discs
  * @returns {Object} The Hanoi visual state
  */
-export function createHanoiState(numDiscs) {
+export function createHanoiState(numDiscs, startPeg = 'A') {
   const pegs = { A: [], B: [], C: [] };
-  // Start: all discs on peg A, largest at bottom
+  const initialPeg = pegs[startPeg] ? startPeg : 'A';
+  // Start: all discs on startPeg, largest at bottom
   for (let d = numDiscs; d >= 1; d--) {
-    pegs.A.push(d);
+    pegs[initialPeg].push(d);
   }
   return {
     pegs,
     numDiscs,
-    animating: null, // { disc, fromPeg, toPeg, progress, startX, startY, endX, endY }
+    startPeg: initialPeg,
+    animating: null,
     ripples: []
   };
 }

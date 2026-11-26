@@ -58,6 +58,24 @@ export function midiToName(midi) {
 }
 
 /**
+ * Clamp a MIDI note by octaves so it stays within [lowOctave, highOctave]
+ * while preserving its exact scale pitch class.
+ *
+ * @param {number} midi
+ * @param {number} [lowOctave=3]
+ * @param {number} [highOctave=6]
+ * @returns {number}
+ */
+export function clampMidiToOctaves(midi, lowOctave = 3, highOctave = 6) {
+  const minMidi = (lowOctave + 1) * 12;
+  const maxMidi = (highOctave + 1) * 12 + 11;
+  let m = midi;
+  while (m < minMidi && m + 12 <= maxMidi) m += 12;
+  while (m > maxMidi && m - 12 >= minMidi) m -= 12;
+  return m;
+}
+
+/**
  * Peg-to-interval mapping for Tower of Hanoi.
  * Each peg produces a different harmonic interval.
  */

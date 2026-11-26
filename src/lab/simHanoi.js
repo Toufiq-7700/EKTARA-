@@ -36,7 +36,12 @@ export function createHanoiSim() {
     if (!score) return;
 
     const bassEvents = score.events.filter(e => e.voice === 'bass' && e.meta?.algorithm === 'hanoi');
-    const n = Math.min(score.params?.depth || 4, 6);
+    const hCfg = score.params?.hanoi || {};
+    const n = hCfg.discs ?? Math.min(score.params?.depth || 4, 6);
+    const startPeg = hCfg.startPeg || 'A';
+    const targetPeg = hCfg.targetPeg || 'C';
+    const pegIntervals = hCfg.pegIntervals || { A: 0, B: 7, C: 12 };
+    const totalPossible = Math.pow(2, n) - 1;
     const totalMoves = bassEvents.length;
 
     ctx.clearRect(0, 0, width, height);
@@ -59,9 +64,9 @@ export function createHanoiSim() {
       moveProgress = reducedMotion ? 1 : Math.min(1, (currentTime - evt.time) / moveWindow);
     }
 
-    // Reconstruct peg stacks cleanly from initial state up to activeMoveIdx
+    // Reconstruct peg stacks cleanly from initial startPeg up to activeMoveIdx
     const pegs = { A: [], B: [], C: [] };
-    for (let d = n; d >= 1; d--) pegs.A.push(d);
+    for (let d = n; d >= 1; d--) pegs[startPeg].push(d);
 
     let animatingDisc = null;
     for (let i = 0; i <= activeMoveIdx; i++) {
@@ -78,10 +83,12 @@ export function createHanoiSim() {
     }
 
     // ─── Header & Rule Info ─────────────────────────────────────────
-    const moveLabel = activeMoveIdx >= 0 ? `Move ${activeMoveIdx + 1} of ${totalMoves}` : `Ready (0 of ${totalMoves})`;
+    const moveLabel = activeMoveIdx >= 0
+      ? `Move ${activeMoveIdx + 1} of ${totalMoves}${totalMoves < totalPossible ? ` (2^${n}-1 = ${totalPossible})` : ''}`
+      : `Ready (0 of ${totalMoves})`;
     ctx.fillStyle = '#e8e2f0';
     ctx.font = 'bold 14px system-ui, sans-serif';
-    ctx.fillText(`▬ Tower of Hanoi — ${moveLabel}`, 16, 26);
+    ctx.fillText(`▬ Tower of Hanoi (${startPeg}→${targetPeg}) — ${moveLabel}`, 16, 26);
 
     ctx.fillStyle = '#b4acc8';
     ctx.font = '14px system-ui, sans-serif';
@@ -91,7 +98,8 @@ export function createHanoiSim() {
     if (activeMoveIdx >= 0) {
       const activeEvt = bassEvents[activeMoveIdx];
       const m = activeEvt.meta;
-      const pegRole = m.to === 'A' ? 'Root' : m.to === 'B' ? '5th' : 'Octave';
+      const iv = pegIntervals[m.to] ?? 0;
+      const pegRole = iv === 0 ? 'Root' : `+${iv}st`;
       ctx.fillStyle = 'rgba(120, 200, 240, 0.16)';
       ctx.strokeStyle = COLOR;
       ctx.lineWidth = 1.5;
@@ -127,7 +135,12 @@ export function createHanoiSim() {
     ctx.fillStyle = 'rgba(120, 200, 240, 0.25)';
     ctx.fillRect(20, groundY, splitX - 40, 3);
 
-    const pegLabels = { A: 'A · Root', B: 'B · 5th', C: 'C · Octave' };
+    const ivName = (iv) => (iv === 0 ? 'Root' : iv === 7 ? '5th' : iv === 12 ? 'Octave' : `+${iv}st`);
+    const pegLabels = {
+      A: `A · ${ivName(pegIntervals.A ?? 0)}`,
+      B: `B · ${ivName(pegIntervals.B ?? 7)}`,
+      C: `C · ${ivName(pegIntervals.C ?? 12)}`
+    };
     for (const pegName of ['A', 'B', 'C']) {
       const px = pegXs[pegName];
 
@@ -217,7 +230,7 @@ export function createHanoiSim() {
     ctx.font = 'bold 14px system-ui, sans-serif';
     ctx.fillText(`Recursive Calls (n=${n})`, callX + 12, callY + 22);
 
-    const nodes = buildCallTreeNodes(n);
+    const nodes = buildCallTreeNodes(Math.min(n, 6), startPeg, targetPeg);
     const maxRows = Math.max(4, Math.floor((callH - 36) / 22));
     // Scroll window to keep active step visible
     let focusRow = 0;

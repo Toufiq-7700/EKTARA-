@@ -18,6 +18,14 @@
  */
 
 /**
+ * Pick the auxiliary peg automatically given source and target pegs.
+ */
+export function getAuxiliaryPeg(from = 'A', to = 'C') {
+  const pegs = ['A', 'B', 'C'];
+  return pegs.find(p => p !== from && p !== to) || 'B';
+}
+
+/**
  * Recursively generate all Hanoi moves as an array.
  * Each move includes the disc number (1 = smallest), source/target pegs,
  * and the step number for timing.
@@ -25,10 +33,12 @@
  * @param {number} n - Number of discs (1-based, disc n is the largest)
  * @param {string} from - Source peg label (default "A")
  * @param {string} to - Target peg label (default "C")
- * @param {string} via - Auxiliary peg label (default "B")
+ * @param {string} [via] - Auxiliary peg label (auto-derived if omitted)
  * @returns {{disc: number, from: string, to: string, step: number}[]}
  */
-export function hanoi(n, from = 'A', to = 'C', via = 'B') {
+export function hanoi(n, from = 'A', to = 'C', via) {
+  if (n <= 0 || from === to) return [];
+  const auxPeg = via && via !== from && via !== to ? via : getAuxiliaryPeg(from, to);
   const moves = [];
   let step = 0;
 
@@ -50,7 +60,7 @@ export function hanoi(n, from = 'A', to = 'C', via = 'B') {
     solve(discs - 1, aux, dst, src);
   }
 
-  solve(n, from, to, via);
+  solve(n, from, to, auxPeg);
   return moves;
 }
 
@@ -60,5 +70,5 @@ export function hanoi(n, from = 'A', to = 'C', via = 'B') {
  * @returns {number}
  */
 export function hanoiMoveCount(n) {
-  return (1 << n) - 1;
+  return Math.pow(2, Math.max(0, n)) - 1;
 }

@@ -84,7 +84,10 @@ function buildVisualLayout(score, resetGrowth = false) {
   const groundY = h * 0.78;
   const treeHeight = Math.min(h * 0.48, w * 0.65);
   const depth = score.params?.depth || 4;
-  const baseAngle = score.params?.branchAngle || 25;
+  const lCfg = score.lsystemConfig || score.params?.lsystem || {};
+  const baseAngle = lCfg.turnAngle ?? score.params?.branchAngle ?? 25;
+  const lengthRatio = lCfg.lengthRatio ?? 0.72;
+  const leafDensity = lCfg.leafDensity ?? 0.7;
   const rng = createPRNG(score.params?.seed || 42);
 
   stars = createStars(120, w, h, rng);
@@ -96,10 +99,12 @@ function buildVisualLayout(score, resetGrowth = false) {
     treeX,
     groundY,
     treeHeight,
-    999
+    999,
+    lengthRatio
   );
 
-  particles = createFallingParticles(treeBranches, 25, rng);
+  const particleCount = Math.round(leafDensity * 36);
+  particles = createFallingParticles(treeBranches, particleCount, rng);
 
   if (!rainState) {
     rainState = createRainState(w, h, groundY, score.params?.seed || 42);
@@ -109,8 +114,9 @@ function buildVisualLayout(score, resetGrowth = false) {
   }
   setRainCanopyTargets(rainState, treeBranches);
 
-  const hanoiDepth = Math.min(depth, 6);
-  hanoiState = createHanoiState(hanoiDepth);
+  const hCfg = score.params?.hanoi || {};
+  const hanoiDiscs = hCfg.discs ?? Math.min(depth, 6);
+  hanoiState = createHanoiState(hanoiDiscs, hCfg.startPeg || 'A');
 
   if (score.euclideanPattern) {
     fireflyState = createFireflyRing(
@@ -251,8 +257,9 @@ export function setExternalVisualTime(timeOrNull) {
   externalTime = timeOrNull;
   if (timeOrNull !== null && currentScore) {
     // Recompute Hanoi disc state up to timeOrNull cleanly
-    const hanoiDepth = Math.min(currentScore.params?.depth || 4, 6);
-    hanoiState = createHanoiState(hanoiDepth);
+    const hCfg = currentScore.params?.hanoi || {};
+    const hanoiDiscs = hCfg.discs ?? Math.min(currentScore.params?.depth || 4, 6);
+    hanoiState = createHanoiState(hanoiDiscs, hCfg.startPeg || 'A');
     processedHanoiSteps.clear();
     processedPercSteps.clear();
     eventCursor = 0;
@@ -446,10 +453,13 @@ function animate(now) {
       ? hoveredTarget.index
       : null;
     const hlColor = hoveredTarget?.algorithm === 'lsystem' ? '#f078c8' : '#f0c878';
+    const lCfg = currentScore?.lsystemConfig || currentScore?.params?.lsystem || {};
     drawTree(ctx, visibleBranches, currentTheme, activeEvents, elapsedTime, windPhase, reducedMotion, {
       glowEnabled: visibleAlgorithms.norgard,
       highlightedBranchIdx: branchHl,
-      highlightColor: hlColor
+      highlightColor: hlColor,
+      lineThickness: lCfg.lineThickness ?? 6,
+      leafDensity: lCfg.leafDensity ?? 0.7
     });
     updateAndDrawParticles(ctx, particles, currentTheme, elapsedTime, groundY);
   }
@@ -494,7 +504,11 @@ function updateActiveEvents(audioTime) {
     processedHanoiSteps.clear();
     processedPercSteps.clear();
     if (currentScore.params) {
-      hanoiState = createHanoiState(Math.min(currentScore.params.depth || 4, 6));
+      const hCfg = currentScore.params.hanoi || {};
+      hanoiState = createHanoiState(
+        hCfg.discs ?? Math.min(currentScore.params.depth || 4, 6),
+        hCfg.startPeg || 'A'
+      );
     }
   }
   lastAudioTime = audioTime;

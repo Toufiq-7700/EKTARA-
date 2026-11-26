@@ -16,12 +16,13 @@ import { createHanoiSim } from './simHanoi.js';
 import { createEuclideanSim } from './simEuclidean.js';
 import { createLSystemSim } from './simLSystem.js';
 import { createTimelineStrip } from './timelineStrip.js';
+import { renderAlgorithmFields, bindAlgorithmEditor } from '../ui/paramEditors.js';
 
 export function buildAlgorithmLab(container, callbacks) {
   const {
     getScore,
     getParams,
-    setParams,
+    onDebouncedParamsChange,
     rebuildAndPlay,
     getCurrentTime,
     isAudioPlaying,
@@ -86,10 +87,17 @@ export function buildAlgorithmLab(container, callbacks) {
                 </div>
               </div>
               <p class="lab-card-desc">${m.description}</p>
+              <details class="lab-card-params-wrap" ${id === activeAlg ? 'open' : ''}>
+                <summary class="lab-card-params-toggle">Parameters</summary>
+                <div class="lab-card-params" data-alg-editor="${id}"></div>
+              </details>
             </div>
           `;
         }).join('')}
       </div>
+
+      <!-- Safety Cap Warning Banner -->
+      <div id="lab-cap-banner" class="lab-cap-banner" role="status" style="display:none;"></div>
 
       <!-- Lab Playback & Step Controls -->
       <div class="lab-transport" role="group" aria-label="Lab playback controls">
@@ -138,8 +146,51 @@ export function buildAlgorithmLab(container, callbacks) {
   const tlCanvas = container.querySelector('#lab-timeline-canvas');
   const tlCtx = tlCanvas.getContext('2d');
   const subControls = container.querySelector('#lab-subcontrols');
+  const capBanner = container.querySelector('#lab-cap-banner');
   const captionEl = container.querySelector('#lab-caption');
   const playBtn = container.querySelector('#lab-play-btn');
+
+  function renderCardEditor(algId, forceRender = false) {
+    const host = container.querySelector(`[data-alg-editor="${algId}"]`);
+    if (!host) return;
+    if (!forceRender && host.contains(document.activeElement)) {
+      const statsEl = host.querySelector('.alg-stats-line');
+      const statsText = getScore()?.stats?.[algId === 'bjorklund' ? 'euclid' : algId];
+      if (statsEl && statsText) statsEl.textContent = statsText;
+      return;
+    }
+    host.innerHTML = renderAlgorithmFields(algId, getParams(), getScore()?.stats);
+    bindAlgorithmEditor(host, algId, {
+      getParams,
+      onImmediatePreview: (nextParams) => {
+        if (algId === 'bjorklund') {
+          const r0 = nextParams.euclid.rings[0];
+          sims.bjorklund.setKN(r0.pulses, r0.steps);
+        }
+      },
+      onUpdateParams: (nextParams, { rerenderSelf }) => {
+        onDebouncedParamsChange(nextParams);
+        if (rerenderSelf) {
+          renderCardEditor(algId, true);
+        }
+      }
+    });
+  }
+
+  function renderAllCardEditors(force = false) {
+    for (const id of ALGORITHM_ORDER) {
+      renderCardEditor(id, force);
+    }
+    const capMsg = getScore()?.stats?.capNotice;
+    if (capBanner) {
+      if (capMsg) {
+        capBanner.textContent = `⚠ ${capMsg}`;
+        capBanner.style.display = 'block';
+      } else {
+        capBanner.style.display = 'none';
+      }
+    }
+  }
 
   // ─── Helper: Sync On/Off & Solo States ───────────────────────────
   function applyEnabledState(id, enabled) {
@@ -162,44 +213,10 @@ export function buildAlgorithmLab(container, callbacks) {
 
   function renderSubControls() {
     const params = getParams();
-    if (activeAlg === 'bjorklund') {
-      const depth = params.depth || 4;
-      const nDefault = 8 + depth * 2;
-      const kDefault = Math.min(nDefault, Math.max(1, Math.round((2 + depth) * (params.densityEuclid || 1))));
-      subControls.style.display = 'flex';
-      subControls.innerHTML = `
-        <label class="lab-sub-item">
-          <span>Hits (k): <strong id="lab-k-val">${kDefault}</strong></span>
-          <input type="range" id="lab-k-slider" min="1" max="${nDefault}" value="${kDefault}" aria-label="Euclidean hits k" />
-        </label>
-        <label class="lab-sub-item">
-          <span>Steps (n): <strong id="lab-n-val">${nDefault}</strong></span>
-          <input type="range" id="lab-n-slider" min="4" max="24" value="${nDefault}" aria-label="Euclidean steps n" />
-        </label>
-      `;
-      const kSlider = subControls.querySelector('#lab-k-slider');
-      const nSlider = subControls.querySelector('#lab-n-slider');
-      const syncEuclid = (commitScore) => {
-        const n = parseInt(nSlider.value, 10);
-        kSlider.max = String(n);
-        const k = Math.min(n, parseInt(kSlider.value, 10));
-        kSlider.value = String(k);
-        subControls.querySelector('#lab-k-val').textContent = String(k);
-        subControls.querySelector('#lab-n-val').textContent = String(n);
-        sims.bjorklund.setKN(k, n);
-        if (commitScore) {
-          const density = k / (2 + (getParams().depth || 4));
-          setParams({ densityEuclid: Math.max(0.3, Math.min(2, density)) });
-          rebuildAndPlay();
-        }
-      };
-      kSlider.addEventListener('input', () => syncEuclid(false));
-      nSlider.addEventListener('input', () => syncEuclid(false));
-      kSlider.addEventListener('change', () => syncEuclid(true));
-      nSlider.addEventListener('change', () => syncEuclid(true));
-    } else if (activeAlg === 'lsystem') {
-      const preset = LSYSTEM_PRESETS[params.lsystemPreset || 'Fern'] || LSYSTEM_PRESETS['Fern'];
-      const maxGen = Math.min(params.depth || 4, preset.maxGen || 5);
+    if (activeAlg === 'lsystem') {
+      const lCfg = params.lsystem || {};
+      const preset = LSYSTEM_PRESETS[lCfg.preset || params.lsystemPreset || 'Fern'] || LSYSTEM_PRESETS['Fern'];
+      const maxGen = lCfg.generations ?? Math.min(params.depth || 4, preset.maxGen || 5);
       subControls.style.display = 'flex';
       subControls.innerHTML = `
         <label class="lab-sub-item">
@@ -235,17 +252,19 @@ export function buildAlgorithmLab(container, callbacks) {
   container.querySelectorAll('.lab-card').forEach(card => {
     const id = card.dataset.alg;
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.lab-card-actions')) return;
+      if (e.target.closest('.lab-card-actions') || e.target.closest('.lab-card-params-wrap')) return;
       selectAlgorithm(id);
     });
     card.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
-        if (e.target.closest('.lab-card-actions')) return;
+        if (e.target.closest('.lab-card-actions') || e.target.closest('.lab-card-params-wrap')) return;
         e.preventDefault();
         selectAlgorithm(id);
       }
     });
   });
+
+  renderAllCardEditors(true);
 
   container.querySelectorAll('.lab-toggle-input').forEach(chk => {
     chk.addEventListener('change', (e) => {
@@ -436,6 +455,13 @@ export function buildAlgorithmLab(container, callbacks) {
 
   function onScoreUpdated() {
     if (activeAlg !== 'bjorklund') sims.bjorklund.setKN(null, null);
+    renderAllCardEditors(false);
+    if (isVisible) renderSubControls();
+  }
+
+  function syncAllFromParams(_params, _score) {
+    sims.bjorklund.setKN(null, null);
+    renderAllCardEditors(false);
     if (isVisible) renderSubControls();
   }
 
@@ -447,6 +473,7 @@ export function buildAlgorithmLab(container, callbacks) {
     setVisible,
     setHoveredTarget: setHovered,
     onScoreUpdated,
+    syncAllFromParams,
     syncPlayState
   };
 }
