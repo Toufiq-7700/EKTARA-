@@ -18,6 +18,7 @@ import { ALGORITHMS, ALGORITHM_ORDER, ROLES_META, ROLE_ORDER } from '../algorith
 import { getAlgorithmsForRole, getAlgorithmPlugin } from '../algorithms/registry.js';
 import { GARDEN_PRESETS, applyDepthToParams, normalizeParams } from '../algorithms/params.js';
 import { renderAlgorithmFields, bindAlgorithmEditor } from './paramEditors.js';
+import { t } from '../i18n/index.js';
 
 const PRESETS = GARDEN_PRESETS;
 
@@ -41,7 +42,7 @@ export function buildUI(container, callbacks) {
     exportWav, exportJson, importJsonParams, setPlaybackStateListener
   } = callbacks;
 
-  let panelVisible = true;
+  let panelVisible = false;
   let hideTimer = null;
   let isPlayingState = true;
 
@@ -49,14 +50,14 @@ export function buildUI(container, callbacks) {
 
   container.innerHTML = `
     <button id="panel-toggle" class="panel-toggle" aria-label="Open controls panel" title="Open controls (H)">
-      ☰ Controls
+      ${t('views.controlsOpen')}
     </button>
 
     <div id="control-panel" class="control-panel" role="complementary" aria-label="Controls">
       <div id="panel-content" class="panel-content">
         <div class="panel-header">
-          <h2 class="panel-title">🌳 Recursive Garden</h2>
-          <button id="panel-close-btn" class="panel-close-btn" aria-label="Close controls panel" title="Close controls (Esc or H)">
+          <h2 class="panel-title" id="panel-title">${t('controls.panelTitle')}</h2>
+          <button id="panel-close-btn" class="panel-close-btn" aria-label="${t('controls.closePanel')}" title="${t('controls.closePanel')} (Esc / H)">
             ✕
           </button>
         </div>
@@ -75,8 +76,8 @@ export function buildUI(container, callbacks) {
 
         <!-- Depth Dial (the star control) -->
         <div class="control-group depth-group" role="group" aria-label="Recursion depth">
-          <label for="depth-dial">Recursion Depth</label>
-          <p class="control-hint">How many layers of recursion — deeper = richer and more complex</p>
+          <label for="depth-dial" data-i18n="controls.depthLabel">${t('controls.depthLabel')}</label>
+          <p class="control-hint" data-i18n="controls.depthHint">${t('controls.depthHint')}</p>
           <input type="range" id="depth-dial" min="1" max="8" value="4" class="depth-dial" 
                  aria-label="Recursion depth from 1 to 8" />
           <span id="depth-val" class="slider-val depth-val-display">4</span>
@@ -84,18 +85,18 @@ export function buildUI(container, callbacks) {
 
         <!-- Seed -->
         <div class="control-group" role="group" aria-label="Seed">
-          <label for="seed-input">Seed</label>
-          <p class="control-hint">The starting number that makes each composition unique</p>
+          <label for="seed-input" data-i18n="controls.seedLabel">${t('controls.seedLabel')}</label>
+          <p class="control-hint" data-i18n="controls.seedHint">${t('controls.seedHint')}</p>
           <div class="seed-row">
             <input type="number" id="seed-input" min="0" max="99999" value="42" aria-label="Seed value" />
-            <button id="random-seed" class="dice-btn" aria-label="Random seed" title="Surprise me!">🎲</button>
+            <button id="random-seed" class="dice-btn" aria-label="Random seed" title="${t('controls.randomSeedTitle')}">🎲</button>
           </div>
         </div>
 
         <!-- Scale/Mood -->
         <div class="control-group" role="group" aria-label="Scale">
-          <label for="scale-select">Scale / Mood</label>
-          <p class="control-hint">The set of notes — pentatonic is peaceful, lydian is dreamy</p>
+          <label for="scale-select" data-i18n="controls.scaleLabel">${t('controls.scaleLabel')}</label>
+          <p class="control-hint" data-i18n="controls.scaleHint">${t('controls.scaleHint')}</p>
           <select id="scale-select" aria-label="Musical scale">
             ${Object.keys(SCALES).map(s => 
               `<option value="${s}"${s === 'pentatonic' ? ' selected' : ''}>${s.charAt(0).toUpperCase() + s.slice(1)}</option>`
@@ -105,7 +106,7 @@ export function buildUI(container, callbacks) {
 
         <!-- Root Note -->
         <div class="control-group" role="group" aria-label="Root note">
-          <label for="root-note">Root Note</label>
+          <label for="root-note" data-i18n="controls.rootNoteLabel">${t('controls.rootNoteLabel')}</label>
           <select id="root-note" aria-label="Root note">
             ${[48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72].map(midi => {
               const name = NOTE_NAMES[midi % 12] + Math.floor(midi / 12 - 1);
@@ -116,8 +117,8 @@ export function buildUI(container, callbacks) {
 
         <!-- Tempo -->
         <div class="control-group" role="group" aria-label="Tempo">
-          <label for="tempo-slider">Tempo</label>
-          <p class="control-hint">Speed of the music (BPM)</p>
+          <label for="tempo-slider" data-i18n="controls.tempoLabel">${t('controls.tempoLabel')}</label>
+          <p class="control-hint" data-i18n="controls.tempoHint">${t('controls.tempoHint')}</p>
           <div class="slider-row">
             <input type="range" id="tempo-slider" min="40" max="90" value="60" aria-label="Tempo BPM" />
             <span id="tempo-val" class="slider-val">60 BPM</span>
@@ -126,8 +127,8 @@ export function buildUI(container, callbacks) {
 
         <!-- Branch Angle -->
         <div class="control-group" role="group" aria-label="Branch angle">
-          <label for="angle-slider">Branch Angle</label>
-          <p class="control-hint">How wide the tree's branches spread</p>
+          <label for="angle-slider" data-i18n="controls.angleLabel">${t('controls.angleLabel')}</label>
+          <p class="control-hint" data-i18n="controls.angleHint">${t('controls.angleHint')}</p>
           <div class="slider-row">
             <input type="range" id="angle-slider" min="10" max="45" value="25" aria-label="Branch angle degrees" />
             <span id="angle-val" class="slider-val">25°</span>
@@ -136,8 +137,8 @@ export function buildUI(container, callbacks) {
 
         <!-- Euclidean Density -->
         <div class="control-group" role="group" aria-label="Rhythm density">
-          <label for="density-slider">Rhythm Density</label>
-          <p class="control-hint">How many percussion hits in each cycle</p>
+          <label for="density-slider" data-i18n="controls.densityLabel">${t('controls.densityLabel')}</label>
+          <p class="control-hint" data-i18n="controls.densityHint">${t('controls.densityHint')}</p>
           <div class="slider-row">
             <input type="range" id="density-slider" min="30" max="200" value="100" aria-label="Euclidean density" />
             <span id="density-val" class="slider-val">1.0×</span>
@@ -146,7 +147,7 @@ export function buildUI(container, callbacks) {
 
         <!-- L-system Preset -->
         <div class="control-group" role="group" aria-label="Tree shape">
-          <label for="lsystem-select">Tree Shape</label>
+          <label for="lsystem-select" data-i18n="controls.treeShapeLabel">${t('controls.treeShapeLabel')}</label>
           <select id="lsystem-select" aria-label="L-system preset">
             ${Object.keys(LSYSTEM_PRESETS).map(name => 
               `<option value="${name}"${name === 'Fern' ? ' selected' : ''}>${name}</option>`
@@ -156,7 +157,7 @@ export function buildUI(container, callbacks) {
 
         <!-- Theme -->
         <div class="control-group" role="group" aria-label="Color theme">
-          <label for="theme-select">Theme</label>
+          <label for="theme-select" data-i18n="controls.themeLabel">${t('controls.themeLabel')}</label>
           <select id="theme-select" aria-label="Color theme">
             ${Object.keys(THEMES).map(name => 
               `<option value="${name}"${name === 'Dusk' ? ' selected' : ''}>${name}</option>`
@@ -166,18 +167,18 @@ export function buildUI(container, callbacks) {
 
         <!-- Ambient -->
         <div class="control-group" role="group" aria-label="Ambient sound">
-          <label for="ambient-select">Ambient Sound</label>
+          <label for="ambient-select" data-i18n="controls.ambientLabel">${t('controls.ambientLabel')}</label>
           <select id="ambient-select" aria-label="Ambient sound type">
-            <option value="wind" selected>Wind</option>
-            <option value="rain">Rain</option>
-            <option value="none">None</option>
+            <option value="wind" data-i18n="controls.ambientWind" selected>${t('controls.ambientWind')}</option>
+            <option value="rain" data-i18n="controls.ambientRain">${t('controls.ambientRain')}</option>
+            <option value="none" data-i18n="controls.ambientNone">${t('controls.ambientNone')}</option>
           </select>
         </div>
 
         <!-- Rain Intensity & Thunder -->
         <div class="control-group" role="group" aria-label="Rain controls">
-          <label for="rain-intensity-slider">Rain Intensity</label>
-          <p class="control-hint">Links visual rainfall, canopy splashes, and layered rain sound (0 = off)</p>
+          <label for="rain-intensity-slider" data-i18n="controls.rainIntensityLabel">${t('controls.rainIntensityLabel')}</label>
+          <p class="control-hint" data-i18n="controls.rainIntensityHint">${t('controls.rainIntensityHint')}</p>
           <div class="slider-row">
             <input type="range" id="rain-intensity-slider" min="0" max="1" step="0.01" value="0.35"
                    aria-label="Rain intensity from 0 to 1" />
@@ -185,25 +186,25 @@ export function buildUI(container, callbacks) {
           </div>
           <label class="toggle-row" style="margin-top:6px;">
             <input type="checkbox" id="thunder-toggle" checked aria-label="Soft distant thunder" />
-            <span>Distant Thunder</span>
-            <span class="control-hint inline">(heavy rain only)</span>
+            <span data-i18n="controls.thunderLabel">${t('controls.thunderLabel')}</span>
+            <span class="control-hint inline" data-i18n="controls.thunderHint">${t('controls.thunderHint')}</span>
           </label>
         </div>
 
         <!-- Recursion Parameters (mirrored with Algorithm Lab) -->
         <details class="control-group recursion-params-panel" open aria-label="Recursion Parameters">
-          <summary>Recursion Parameters</summary>
-          <p class="control-hint">Algorithm choice & parameters per role (live synced with Lab)</p>
+          <summary data-i18n="controls.recursionParamsTitle">${t('controls.recursionParamsTitle')}</summary>
+          <p class="control-hint" data-i18n="controls.recursionParamsHint">${t('controls.recursionParamsHint')}</p>
           <p id="drawer-cap-notice" class="alg-cap-warning" role="status" style="display:none;"></p>
           ${ROLE_ORDER.map(role => {
             const m = ROLES_META[role];
             const choices = getAlgorithmsForRole(role);
             return `
               <details class="drawer-alg-section" ${role === 'melody' ? 'open' : ''}>
-                <summary style="color:${m.color};">${m.shape} ${m.title}</summary>
+                <summary style="color:${m.color};" data-drawer-role="${role}">${m.shape} ${t(`roles.${role}`)}</summary>
                 <div class="drawer-role-picker">
                   <select class="drawer-alg-select" data-role="${role}" aria-label="Choose ${m.title} algorithm">
-                    ${choices.map(ch => `<option value="${ch.id}">${ch.name}</option>`).join('')}
+                    ${choices.map(ch => `<option value="${ch.id}">${t(`algorithms.${ch.id}.name`)}</option>`).join('')}
                   </select>
                 </div>
                 <div class="drawer-alg-editor" data-drawer-editor="${role}"></div>
@@ -214,18 +215,18 @@ export function buildUI(container, callbacks) {
 
         <!-- Sound Panel (Timbre selector per layer) -->
         <details class="control-group sound-panel" open aria-label="Sound timbres">
-          <summary>Sound — Instrument Timbres</summary>
-          <p class="control-hint">Warm procedural timbres with vibrato & seeded humanisation</p>
+          <summary data-i18n="controls.soundPanelTitle">${t('controls.soundPanelTitle')}</summary>
+          <p class="control-hint" data-i18n="controls.soundPanelHint">${t('controls.soundPanelHint')}</p>
           ${[
-            ['melody', 'Melody (Nørgård)'],
-            ['canon', 'Canon'],
-            ['bass', 'Bass (Hanoi)'],
-            ['percussion', 'Percussion (Euclid)'],
-            ['ambient', 'Ambient Pad']
-          ].map(([layer, label]) => `
+            ['melody', 'controls.layerMelody'],
+            ['canon', 'controls.layerCanon'],
+            ['bass', 'controls.layerBass'],
+            ['percussion', 'controls.layerPercussion'],
+            ['ambient', 'controls.layerAmbient']
+          ].map(([layer, key]) => `
             <div class="sound-row">
-              <label for="timbre-${layer}" class="sound-label">${label}</label>
-              <select id="timbre-${layer}" class="timbre-select" data-layer="${layer}" aria-label="${label} timbre">
+              <label for="timbre-${layer}" class="sound-label" data-i18n="${key}">${t(key)}</label>
+              <select id="timbre-${layer}" class="timbre-select" data-layer="${layer}" aria-label="${t(key)} timbre">
                 ${TIMBRE_OPTIONS[layer].map(opt =>
                   `<option value="${opt}"${opt === DEFAULT_TIMBRES[layer] ? ' selected' : ''}>${opt}</option>`
                 ).join('')}
@@ -236,10 +237,16 @@ export function buildUI(container, callbacks) {
 
         <!-- Layer Volumes -->
         <details class="control-group layers-group">
-          <summary>Layer Volumes</summary>
-          ${['melody', 'canon', 'bass', 'percussion', 'ambient'].map(layer => `
+          <summary data-i18n="controls.layerVolumesTitle">${t('controls.layerVolumesTitle')}</summary>
+          ${[
+            ['melody', 'controls.layerMelody'],
+            ['canon', 'controls.layerCanon'],
+            ['bass', 'controls.layerBass'],
+            ['percussion', 'controls.layerPercussion'],
+            ['ambient', 'controls.layerAmbient']
+          ].map(([layer, key]) => `
             <div class="slider-row layer-row">
-              <label for="vol-${layer}" class="layer-label">${layer.charAt(0).toUpperCase() + layer.slice(1)}</label>
+              <label for="vol-${layer}" class="layer-label" data-i18n="${key}">${t(key)}</label>
               <input type="range" id="vol-${layer}" min="0" max="100" value="${layer === 'ambient' ? 50 : 70}" 
                      class="layer-slider" data-layer="${layer}" aria-label="${layer} volume" />
               <button class="mute-btn" data-layer="${layer}" aria-label="Mute ${layer}">🔈</button>
@@ -251,30 +258,30 @@ export function buildUI(container, callbacks) {
         <div class="control-group toggles" role="group" aria-label="Toggles">
           <label class="toggle-row">
             <input type="checkbox" id="xray-toggle" aria-label="Recursion X-ray mode" />
-            <span>X-Ray Mode</span>
-            <span class="control-hint inline">(show recursion details)</span>
+            <span data-i18n="controls.xrayLabel">${t('controls.xrayLabel')}</span>
+            <span class="control-hint inline" data-i18n="controls.xrayHint">${t('controls.xrayHint')}</span>
           </label>
           <label class="toggle-row">
             <input type="checkbox" id="evolve-toggle" aria-label="Evolve mode" />
-            <span>Evolve</span>
-            <span class="control-hint inline">(seed changes each loop)</span>
+            <span data-i18n="controls.evolveLabel">${t('controls.evolveLabel')}</span>
+            <span class="control-hint inline" data-i18n="controls.evolveHint">${t('controls.evolveHint')}</span>
           </label>
         </div>
 
         <!-- Sleep Timer -->
         <div class="control-group" role="group" aria-label="Sleep timer">
-          <label for="sleep-select">Sleep Timer</label>
+          <label for="sleep-select" data-i18n="controls.sleepLabel">${t('controls.sleepLabel')}</label>
           <select id="sleep-select" aria-label="Sleep timer duration">
-            <option value="0" selected>Off</option>
-            <option value="5">5 minutes</option>
-            <option value="15">15 minutes</option>
-            <option value="30">30 minutes</option>
+            <option value="0" data-i18n="controls.sleepOff" selected>${t('controls.sleepOff')}</option>
+            <option value="5" data-i18n="controls.sleep5">${t('controls.sleep5')}</option>
+            <option value="15" data-i18n="controls.sleep15">${t('controls.sleep15')}</option>
+            <option value="30" data-i18n="controls.sleep30">${t('controls.sleep30')}</option>
           </select>
         </div>
 
         <!-- Zoom / Depth -->
         <div class="control-group" role="group" aria-label="Zoom">
-          <label for="zoom-slider">Zoom into Tree</label>
+          <label for="zoom-slider" data-i18n="controls.zoomLabel">${t('controls.zoomLabel')}</label>
           <div class="slider-row">
             <input type="range" id="zoom-slider" min="50" max="400" value="100" aria-label="Zoom level" />
             <span id="zoom-val" class="slider-val">1.0×</span>
@@ -283,46 +290,42 @@ export function buildUI(container, callbacks) {
 
         <!-- Presets -->
         <div class="control-group presets-group" role="group" aria-label="Quick presets">
-          <label>Presets</label>
+          <label data-i18n="controls.presetsLabel">${t('controls.presetsLabel')}</label>
           <div class="preset-buttons">
             ${Object.keys(PRESETS).map(name => 
-              `<button class="preset-btn" data-preset="${name}" aria-label="Load preset: ${name}">${name}</button>`
+              `<button class="preset-btn" data-preset="${name}" aria-label="Load preset: ${name}">${t(`presets.${name}`)}</button>`
             ).join('')}
           </div>
         </div>
 
         <!-- Share link -->
         <div class="control-group" role="group" aria-label="Share">
-          <button id="share-btn" class="share-btn" aria-label="Copy share link">🔗 Copy Share Link</button>
+          <button id="share-btn" class="share-btn" aria-label="Copy share link">${t('controls.shareBtn')}</button>
         </div>
 
         <!-- Algorithm explainer -->
         <details class="control-group explainer">
-          <summary>What You're Seeing & Hearing</summary>
+          <summary data-i18n="controls.explainerTitle">${t('controls.explainerTitle')}</summary>
           <div class="explainer-content">
-            <p><strong>🎵 Nørgård Infinity Series</strong> → melody. A self-similar sequence where
-              every value contains smaller copies of itself, creating a fractal melody.</p>
-            <p><strong>🗼 Tower of Hanoi</strong> → bass. Discs move between pegs — big disc = slow low notes,
-              small disc = quick high notes.</p>
-            <p><strong>⭕ Euclidean Rhythm</strong> → percussion. Distributes beats as evenly as possible
-              in a cycle, like rhythms found in world music.</p>
-            <p><strong>🌿 L-System</strong> → the tree. Rewriting rules grow branches recursively,
-              with angles from the melody, so the tree's shape IS the music.</p>
+            <p>🎵 <span data-i18n="controls.explainerNorgard">${t('controls.explainerNorgard')}</span></p>
+            <p>🗼 <span data-i18n="controls.explainerHanoi">${t('controls.explainerHanoi')}</span></p>
+            <p>⭕ <span data-i18n="controls.explainerEuclid">${t('controls.explainerEuclid')}</span></p>
+            <p>🌿 <span data-i18n="controls.explainerLsystem">${t('controls.explainerLsystem')}</span></p>
           </div>
         </details>
 
         <!-- Download WAV & Parameters JSON -->
         <div class="control-group" id="export-group" role="group" aria-label="Export">
-          <label for="export-duration">Export Composition</label>
+          <label for="export-duration" data-i18n="controls.exportTitle">${t('controls.exportTitle')}</label>
           <select id="export-duration" aria-label="Export duration">
-            <option value="30">30 seconds (+6s tail)</option>
-            <option value="60" selected>1 minute (+6s tail)</option>
-            <option value="180">3 minutes (+6s tail)</option>
+            <option value="30" data-i18n="controls.export30">${t('controls.export30')}</option>
+            <option value="60" data-i18n="controls.export60" selected>${t('controls.export60')}</option>
+            <option value="180" data-i18n="controls.export180">${t('controls.export180')}</option>
           </select>
           <div class="export-actions">
-            <button id="download-btn" class="download-btn" aria-label="Download WAV audio">⬇ Download WAV</button>
-            <button id="download-json-btn" class="download-btn secondary" aria-label="Export parameters JSON" title="Download parameters as JSON">📄 JSON</button>
-            <button id="load-json-btn" class="download-btn secondary" aria-label="Load parameters JSON" title="Load parameters from JSON">📂 Load</button>
+            <button id="download-btn" class="download-btn" aria-label="Download WAV audio" data-i18n="controls.downloadWav">${t('controls.downloadWav')}</button>
+            <button id="download-json-btn" class="download-btn secondary" aria-label="Export parameters JSON" title="${t('controls.exportJson')}" data-i18n="controls.exportJson">${t('controls.exportJson')}</button>
+            <button id="load-json-btn" class="download-btn secondary" aria-label="Load parameters JSON" title="${t('controls.loadJson')}" data-i18n="controls.loadJson">${t('controls.loadJson')}</button>
             <input type="file" id="load-json-input" accept=".json,application/json" style="display:none;" aria-label="Choose JSON parameter file" />
           </div>
           <div id="export-progress" class="export-progress" style="display:none;" role="status" aria-live="polite">
@@ -512,7 +515,7 @@ export function buildUI(container, callbacks) {
   const thunderToggle = container.querySelector('#thunder-toggle');
 
   function formatRainLabel(v) {
-    return v <= 0.005 ? 'Off' : `${Math.round(v * 100)}%`;
+    return v <= 0.005 ? t('controls.rainOff') : `${Math.round(v * 100)}%`;
   }
 
   container.querySelector('#ambient-select').addEventListener('change', (e) => {
@@ -627,8 +630,8 @@ export function buildUI(container, callbacks) {
     saveParamsToHash();
     navigator.clipboard.writeText(window.location.href).then(() => {
       const btn = container.querySelector('#share-btn');
-      btn.textContent = '✓ Copied!';
-      setTimeout(() => { btn.textContent = '🔗 Copy Share Link'; }, 2000);
+      btn.textContent = t('controls.shareCopied');
+      setTimeout(() => { btn.textContent = t('controls.shareBtn'); }, 2000);
     }).catch(() => {
       // Fallback: select the URL
       const url = window.location.href;
@@ -654,21 +657,21 @@ export function buildUI(container, callbacks) {
       exportStatus.classList.remove('error');
       exportProgress.style.display = 'block';
       exportBar.style.width = '5%';
-      exportText.textContent = 'Starting offline render...';
+      exportText.textContent = t('controls.exportStarting');
 
       try {
         const result = await exportWav(durationSeconds, (pct, msg) => {
           exportBar.style.width = `${pct}%`;
           exportText.textContent = `${msg} (${pct}%)`;
         });
-        exportStatus.textContent = `Saved ${result.filename}`;
+        exportStatus.textContent = t('controls.exportSaved', { filename: result.filename });
         setTimeout(() => {
           exportProgress.style.display = 'none';
         }, 1200);
       } catch (err) {
         console.error('WAV export failed:', err);
         exportProgress.style.display = 'none';
-        exportStatus.textContent = 'Export failed — please try a shorter duration or reload.';
+        exportStatus.textContent = t('controls.exportFailed');
         exportStatus.classList.add('error');
       } finally {
         downloadBtn.disabled = false;
@@ -682,9 +685,9 @@ export function buildUI(container, callbacks) {
       try {
         const res = exportJson();
         exportStatus.classList.remove('error');
-        exportStatus.textContent = `Saved ${res.filename}`;
+        exportStatus.textContent = t('controls.exportSaved', { filename: res.filename });
       } catch (err) {
-        exportStatus.textContent = 'Could not export parameters JSON.';
+        exportStatus.textContent = t('controls.exportJsonError');
         exportStatus.classList.add('error');
       }
     });
@@ -704,10 +707,10 @@ export function buildUI(container, callbacks) {
         updateControlsFromParams(loaded);
         renderAllDrawerEditors(true);
         exportStatus.classList.remove('error');
-        exportStatus.textContent = `Loaded ${file.name}`;
+        exportStatus.textContent = t('controls.loadJsonSuccess', { filename: file.name });
       } catch (err) {
         exportStatus.classList.add('error');
-        exportStatus.textContent = 'Invalid JSON parameter file.';
+        exportStatus.textContent = t('controls.loadJsonError');
       } finally {
         loadJsonInput.value = '';
       }
@@ -858,6 +861,45 @@ export function buildUI(container, callbacks) {
     container.querySelector('#zoom-val').textContent = (pct / 100).toFixed(1) + '×';
   }
 
+  function applyLanguage() {
+    panelToggle.textContent = t('views.controlsOpen');
+    const pt = container.querySelector('#panel-title');
+    if (pt) pt.textContent = t('controls.panelTitle');
+    panelCloseBtn.setAttribute('aria-label', t('controls.closePanel'));
+    panelCloseBtn.title = `${t('controls.closePanel')} (Esc / H)`;
+
+    container.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (key) el.textContent = t(key);
+    });
+
+    const randomBtn = container.querySelector('#random-seed');
+    if (randomBtn) randomBtn.title = t('controls.randomSeedTitle');
+
+    for (const role of ROLE_ORDER) {
+      const m = ROLES_META[role];
+      const sum = container.querySelector(`[data-drawer-role="${role}"]`);
+      if (sum) sum.textContent = `${m.shape} ${t(`roles.${role}`)}`;
+      const sel = container.querySelector(`.drawer-alg-select[data-role="${role}"]`);
+      if (sel) {
+        for (const opt of sel.options) {
+          opt.textContent = t(`algorithms.${opt.value}.name`);
+        }
+      }
+    }
+
+    container.querySelectorAll('.preset-btn').forEach(btn => {
+      const name = btn.dataset.preset;
+      if (name) btn.textContent = t(`presets.${name}`);
+    });
+
+    const shareBtnEl = container.querySelector('#share-btn');
+    if (shareBtnEl) shareBtnEl.textContent = t('controls.shareBtn');
+
+    rainValLabel.textContent = formatRainLabel(parseFloat(rainSlider.value));
+    renderAllDrawerEditors(true);
+  }
+
   return {
     updateControlsFromParams,
     syncAllFromParams: (p, _score) => {
@@ -865,6 +907,7 @@ export function buildUI(container, callbacks) {
       renderAllDrawerEditors(false);
     },
     updateZoomDisplay,
+    applyLanguage,
     show: () => setPanelOpen(true),
     hide: () => setPanelOpen(false)
   };

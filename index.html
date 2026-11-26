@@ -3,31 +3,34 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Recursive Garden</title>
+  <title>EKTARA</title>
   <link rel="stylesheet" href="/src/styles.css" />
 </head>
 <body>
   <!-- Welcome screen -->
   <div id="welcome-screen" class="welcome-screen">
     <div class="welcome-content">
-      <h1 class="welcome-title">🌳 Recursive Garden</h1>
-      <p class="welcome-subtitle">
-        Four recursive algorithms weave melody, rhythm, bass, and visuals
-        into a living, breathing garden. Put on headphones for the best experience.
+      <h1 class="welcome-title">EKTARA</h1>
+      <p id="welcome-tagline" class="welcome-tagline">Where algorithms meet sound</p>
+      <p id="welcome-subtitle" class="welcome-subtitle">
+        One string, one rule, infinite music. Four recursive algorithms weave melody,
+        bass, rhythm, and living visuals from a single seed.
       </p>
       <button id="begin-btn" class="begin-btn" aria-label="Begin the experience">
         Begin
       </button>
-      <p class="welcome-hint">🎧 Headphones recommended</p>
+      <p id="welcome-hint" class="welcome-hint">🎧 Headphones recommended</p>
     </div>
   </div>
 
   <!-- Top View Switcher (Garden / Split / Lab) -->
-  <nav id="view-switcher" class="view-switcher" aria-label="Workspace view" style="display:none;">
-    <button class="view-tab active" data-view="garden" aria-pressed="true">🌳 Garden</button>
-    <button class="view-tab split-only" data-view="split" aria-pressed="false">◫ Split</button>
-    <button class="view-tab" data-view="lab" aria-pressed="false">🔬 Lab</button>
-  </nav>
+  <header id="view-switcher" class="view-switcher" aria-label="Workspace view" style="display:none;">
+    <nav class="view-tabs" aria-label="Workspace view">
+      <button class="view-tab active" data-view="garden" aria-pressed="true">🌳 Garden</button>
+      <button class="view-tab split-only" data-view="split" aria-pressed="false">◫ Split</button>
+      <button class="view-tab" data-view="lab" aria-pressed="false">🔬 Lab</button>
+    </nav>
+  </header>
 
   <!-- Workspace: Garden stage + Algorithm Lab -->
   <div id="workspace-layout" class="workspace-layout view-garden" style="display:none;">

@@ -1,5 +1,5 @@
 /* ============================================
-   Recursive Garden — Base Styles
+   EKTARA (একতারা) — Base Styles
    ============================================ */
 
 * {
@@ -12,9 +12,20 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: 'Segoe UI', system-ui, -apple-system, 'Noto Sans Bengali', 'Hind Siliguri', sans-serif;
   background: #0a0a1a;
   color: #e0e0e0;
+}
+
+html[lang="bn"] body,
+html[lang="bn"] p,
+html[lang="bn"] label,
+html[lang="bn"] button,
+html[lang="bn"] select,
+html[lang="bn"] summary,
+html[lang="bn"] .lab-caption,
+html[lang="bn"] .alg-stats-line {
+  line-height: 1.6;
 }
 
 /* ─── Welcome Screen ──────────────────────────────────────── */
@@ -37,21 +48,28 @@ html, body {
 
 .welcome-content {
   text-align: center;
-  max-width: 480px;
+  max-width: 540px;
   padding: 2rem;
 }
 
 .welcome-title {
   font-size: 2.5rem;
   font-weight: 300;
-  letter-spacing: 0.1em;
-  margin-bottom: 1rem;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.45rem;
   color: #e8d5b5;
 }
 
+.welcome-tagline {
+  font-size: 1rem;
+  color: #f0a060;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.9rem;
+}
+
 .welcome-subtitle {
-  font-size: 1.1rem;
-  line-height: 1.6;
+  font-size: 1.05rem;
+  line-height: 1.65;
   color: #b0a8c0;
   margin-bottom: 2rem;
 }
@@ -116,24 +134,35 @@ html, body {
   transform: translateX(-50%);
   z-index: 300;
   display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
   gap: 4px;
+  max-width: calc(100vw - 24px);
   padding: 4px;
   border-radius: 999px;
-  background: rgba(12, 11, 24, 0.86);
+  background: rgba(12, 11, 24, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.14);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+.view-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .view-tab {
   border: none;
   background: transparent;
   color: #c6bed6;
+  font-family: inherit;
   font-size: 14px;
   font-weight: 500;
-  padding: 7px 16px;
+  padding: 6px 14px;
   border-radius: 999px;
   cursor: pointer;
+  white-space: nowrap;
   transition: background 0.2s, color 0.2s;
 }
 
@@ -640,6 +669,14 @@ html, body {
   .split-only {
     display: none;
   }
+  .view-switcher {
+    gap: 6px;
+    padding: 4px 8px;
+  }
+  .view-tab {
+    padding: 5px 10px;
+    font-size: 13px;
+  }
   .lab-cards {
     grid-template-columns: 1fr;
   }
@@ -969,11 +1006,14 @@ select option {
   font-size: 0.78rem !important;
   color: #b8b0cc !important;
   margin-bottom: 0 !important;
-  min-width: 112px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 48%;
 }
 
 .timbre-select {
   flex: 1;
+  min-width: 0;
   font-size: 0.8rem;
   padding: 5px 8px;
 }
@@ -983,7 +1023,8 @@ select option {
 }
 
 .layer-label {
-  min-width: 70px;
+  flex: 0 1 auto;
+  min-width: 64px;
   font-size: 0.75rem !important;
 }
 

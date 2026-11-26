@@ -11,6 +11,7 @@ import { validateEuclideanParams } from '../algorithms/bjorklund.js';
 import { hanoiMoveCount } from '../algorithms/hanoi.js';
 import { createPRNG } from '../algorithms/prng.js';
 import { getAlgorithmPlugin } from '../algorithms/registry.js';
+import { t } from '../i18n/index.js';
 import {
   PEG_INTERVAL_CHOICES,
   normalizeParams,
@@ -296,8 +297,8 @@ export function renderAlgorithmFields(roleOrId, rawParams, scoreStats) {
 function renderFooterButtons(algId) {
   return `
     <div class="alg-footer-btns">
-      <button type="button" class="alg-mini-btn" data-alg-reset="${algId}" aria-label="Reset ${algId} to default">↺ Reset</button>
-      <button type="button" class="alg-mini-btn" data-alg-random="${algId}" aria-label="Randomise ${algId} deterministically">🎲 Randomise</button>
+      <button type="button" class="alg-mini-btn" data-alg-reset="${algId}" aria-label="Reset ${algId} to default">${t('lab.resetBtn')}</button>
+      <button type="button" class="alg-mini-btn" data-alg-random="${algId}" aria-label="Randomise ${algId} deterministically">${t('lab.randomBtn')}</button>
     </div>
   `;
 }

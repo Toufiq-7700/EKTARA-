@@ -76,12 +76,12 @@ function writeAscii(view, offset, str) {
 }
 
 /**
- * Build an export filename matching `recursive-garden-<seed>-<depth>.<ext>`.
+ * Build an export filename matching `ektara-<seed>-<depth>.<ext>`.
  */
 export function buildExportFilename(params, ext = 'wav') {
   const seed = params?.seed ?? 42;
   const depth = params?.depth ?? 4;
-  return `recursive-garden-${seed}-${depth}.${ext}`;
+  return `ektara-${seed}-${depth}.${ext}`;
 }
 
 /**
@@ -225,7 +225,8 @@ export async function exportScoreToWav(params, options = {}) {
  */
 export function exportParamsToJson(params) {
   const payload = {
-    app: 'Recursive Garden',
+    app: 'EKTARA',
+    nativeName: 'একতারা',
     version: '1.0.0',
     exportedAt: new Date().toISOString(),
     params: { ...params }

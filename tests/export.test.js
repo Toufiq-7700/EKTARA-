@@ -79,18 +79,18 @@ describe('WAV Encoder', () => {
 });
 
 describe('Export Filenames & JSON', () => {
-  it('formats filenames as recursive-garden-<seed>-<depth>.<ext>', () => {
-    expect(buildExportFilename({ seed: 137, depth: 5 }, 'wav')).toBe('recursive-garden-137-5.wav');
-    expect(buildExportFilename({ seed: 42, depth: 4 }, 'json')).toBe('recursive-garden-42-4.json');
+  it('formats filenames as ektara-<seed>-<depth>.<ext>', () => {
+    expect(buildExportFilename({ seed: 137, depth: 5 }, 'wav')).toBe('ektara-137-5.wav');
+    expect(buildExportFilename({ seed: 42, depth: 4 }, 'json')).toBe('ektara-42-4.json');
   });
 
   it('exports parameters as a valid JSON blob', async () => {
     const params = { seed: 42, depth: 4, scale: 'pentatonic', tempo: 60 };
     const { blob, filename } = exportParamsToJson(params);
-    expect(filename).toBe('recursive-garden-42-4.json');
+    expect(filename).toBe('ektara-42-4.json');
     expect(blob.type).toBe('application/json');
     const parsed = JSON.parse(await blob.text());
-    expect(parsed.app).toBe('Recursive Garden');
+    expect(parsed.app).toBe('EKTARA');
     expect(parsed.params).toEqual(params);
   });
 });

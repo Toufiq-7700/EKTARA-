@@ -1,11 +1,18 @@
 /**
- * Recursive Garden — Main Entry Point
- * 
- * Bootstraps the application: handles the welcome screen,
- * initializes audio context on user gesture, builds the score
- * from the four recursive algorithms, and starts playback + visuals.
+ * EKTARA (একতারা) — Main Entry Point
+ * "One string, one rule, infinite music."
+ *
+ * Bootstraps the application: initializes i18n and self-hosted Bengali fonts,
+ * handles the welcome screen, initializes audio context on user gesture,
+ * builds the score from recursive algorithm plugins, and starts playback + visuals.
  */
 
+import '@fontsource/noto-sans-bengali/400.css';
+import '@fontsource/noto-sans-bengali/600.css';
+import '@fontsource/hind-siliguri/400.css';
+import '@fontsource/hind-siliguri/600.css';
+
+import { initI18n, setLang, getLang, t, onLangChange } from './i18n/index.js';
 import { buildScore } from './algorithms/score.js';
 import { initAudio, playScore, pausePlayback, resumePlayback, stopPlayback, 
          setMasterVolume, setLayerVolume, setLayerMute, setSleepTimer,
@@ -49,6 +56,36 @@ const uiOverlay = document.getElementById('ui-overlay');
 const statusBanner = document.getElementById('status-banner');
 const statusMessage = document.getElementById('status-message');
 const statusAction = document.getElementById('status-action');
+const welcomeTagline = document.getElementById('welcome-tagline');
+const welcomeSubtitle = document.getElementById('welcome-subtitle');
+const welcomeHint = document.getElementById('welcome-hint');
+
+setLang('en');
+initI18n();
+
+function applyStaticI18n() {
+  const lang = getLang();
+  document.documentElement.lang = lang;
+  document.title = t('app.name');
+  if (welcomeTagline) welcomeTagline.textContent = t('app.tagline');
+  if (welcomeSubtitle) welcomeSubtitle.textContent = t('welcome.subtitle');
+  if (beginBtn && !beginBtn.disabled) beginBtn.textContent = t('welcome.begin');
+  if (welcomeHint) welcomeHint.textContent = t('welcome.headphones');
+  if (statusAction) statusAction.textContent = t('status.retryAudio');
+
+  document.querySelectorAll('.view-tab').forEach(btn => {
+    const view = btn.dataset.view;
+    if (view && t(`views.${view}`)) btn.textContent = t(`views.${view}`);
+  });
+}
+
+onLangChange(() => {
+  applyStaticI18n();
+  uiHandle?.applyLanguage?.();
+  labHandle?.applyLanguage?.();
+});
+
+applyStaticI18n();
 
 function showStatusBanner(message, withRetry = false) {
   if (!statusBanner) return;
@@ -68,7 +105,7 @@ if (statusAction) {
       hideStatusBanner();
       if (currentScore) playScore(currentScore, onScoreEvent);
     } catch (err) {
-      showStatusBanner('Audio is still blocked by your browser — check site sound permissions.', true);
+      showStatusBanner(t('status.audioRetryFailed'), true);
     }
   });
 }
@@ -77,7 +114,7 @@ if (statusAction) {
 
 beginBtn.addEventListener('click', async () => {
   beginBtn.disabled = true;
-  beginBtn.textContent = 'Preparing...';
+  beginBtn.textContent = t('welcome.preparing');
 
   // Load params from URL hash if present
   loadParamsFromHash();
@@ -98,7 +135,7 @@ beginBtn.addEventListener('click', async () => {
     audioReady = true;
   } catch (err) {
     console.error('Audio init failed:', err);
-    showStatusBanner('Audio was blocked by your browser. Visuals are running.', true);
+    showStatusBanner(t('status.audioBlocked'), true);
   }
 
   // Fade out welcome screen

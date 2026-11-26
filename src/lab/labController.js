@@ -29,6 +29,7 @@ import {
 } from './simPlugins.js';
 import { createTimelineStrip } from './timelineStrip.js';
 import { renderAlgorithmFields, bindAlgorithmEditor } from '../ui/paramEditors.js';
+import { t, getLang } from '../i18n/index.js';
 
 export function buildAlgorithmLab(container, callbacks) {
   const {
@@ -104,11 +105,11 @@ export function buildAlgorithmLab(container, callbacks) {
               <div class="lab-card-head">
                 <span class="lab-card-title">
                   <span class="alg-shape" aria-hidden="true">${rm.shape}</span>
-                  ${rm.title}
+                  <span data-role-title="${role}">${t(`roles.${role}`)}</span>
                 </span>
                 <div class="lab-card-actions">
-                  <button class="lab-solo-btn" data-role="${role}" aria-pressed="false" title="Solo ${rm.title}">Solo</button>
-                  <label class="lab-switch" title="Enable/Disable ${rm.title}">
+                  <button class="lab-solo-btn" data-role="${role}" aria-pressed="false" title="${t('lab.solo')} ${t(`roles.${role}`)}">${t('lab.solo')}</button>
+                  <label class="lab-switch" title="${t(`roles.${role}`)}">
                     <input type="checkbox" class="lab-toggle-input" data-role="${role}" checked aria-label="Enable ${rm.title}" />
                     <span class="lab-switch-track"></span>
                   </label>
@@ -116,17 +117,17 @@ export function buildAlgorithmLab(container, callbacks) {
               </div>
 
               <label class="lab-alg-picker">
-                <span class="sr-label">${rm.title} Algorithm</span>
+                <span class="sr-label">${t(`roles.${role}`)}</span>
                 <select class="lab-alg-select" data-role="${role}" aria-label="Choose algorithm for ${rm.title}">
-                  ${choices.map(ch => `<option value="${ch.id}"${ch.id === plugin.id ? ' selected' : ''}>${ch.name}</option>`).join('')}
+                  ${choices.map(ch => `<option value="${ch.id}"${ch.id === plugin.id ? ' selected' : ''}>${t(`algorithms.${ch.id}.name`)}</option>`).join('')}
                 </select>
               </label>
 
-              <p class="lab-card-desc" data-role-desc="${role}">${plugin.description}</p>
+              <p class="lab-card-desc" data-role-desc="${role}">${t(`algorithms.${plugin.id}.desc`)}</p>
               <div class="lab-card-preview" data-role-preview="${role}">${plugin.preview}</div>
 
               <details class="lab-card-params-wrap" ${role === activeRole ? 'open' : ''}>
-                <summary class="lab-card-params-toggle">Parameters</summary>
+                <summary class="lab-card-params-toggle" data-i18n="lab.parameters">${t('lab.parameters')}</summary>
                 <div class="lab-card-params" data-role-editor="${role}"></div>
               </details>
             </div>
@@ -138,12 +139,12 @@ export function buildAlgorithmLab(container, callbacks) {
 
       <div class="lab-transport" role="group" aria-label="Lab playback controls">
         <div class="lab-transport-btns">
-          <button id="lab-play-btn" class="lab-btn" aria-label="Play or Pause">⏸ Pause</button>
-          <button id="lab-step-back" class="lab-btn" aria-label="Step back one recursive event">⏮ Step</button>
-          <button id="lab-step-fwd" class="lab-btn" aria-label="Step forward one recursive event">⏭ Step</button>
-          <button id="lab-replay-btn" class="lab-btn" aria-label="Replay from start">↺ Replay</button>
+          <button id="lab-play-btn" class="lab-btn" aria-label="Play or Pause">${t('lab.pause')}</button>
+          <button id="lab-step-back" class="lab-btn" aria-label="Step back one recursive event">${t('lab.stepBack')}</button>
+          <button id="lab-step-fwd" class="lab-btn" aria-label="Step forward one recursive event">${t('lab.stepFwd')}</button>
+          <button id="lab-replay-btn" class="lab-btn" aria-label="Replay from start">${t('lab.replay')}</button>
           <label class="lab-speed-wrap" for="lab-speed-select">
-            <span>Speed</span>
+            <span id="lab-speed-label">${t('lab.speed')}</span>
             <select id="lab-speed-select" aria-label="Playback speed">
               <option value="0.25">0.25×</option>
               <option value="0.5">0.5×</option>
@@ -154,7 +155,7 @@ export function buildAlgorithmLab(container, callbacks) {
           </label>
         </div>
         <div id="lab-caption" class="lab-caption" role="status" aria-live="polite">
-          Live playback — select any role card, swap its algorithm, or click Step.
+          ${t('lab.captionDefault')}
         </div>
       </div>
 
@@ -166,8 +167,8 @@ export function buildAlgorithmLab(container, callbacks) {
 
       <div class="lab-timeline-wrap">
         <div class="lab-timeline-header">
-          <span>What You Hear — Combined Recursive Layers</span>
-          <span class="lab-timeline-hint">Hover to highlight in Garden · Click to step to event</span>
+          <span id="lab-what-hear-title">${t('lab.whatYouHear')}</span>
+          <span id="lab-what-hear-hint" class="lab-timeline-hint">${t('lab.whatYouHearHint')}</span>
         </div>
         <canvas id="lab-timeline-canvas" class="lab-timeline-canvas" aria-label="Four-track musical timeline"></canvas>
       </div>
@@ -196,7 +197,7 @@ export function buildAlgorithmLab(container, callbacks) {
     if (sel) sel.value = plugin.id;
 
     const descEl = container.querySelector(`[data-role-desc="${role}"]`);
-    if (descEl) descEl.textContent = plugin.description;
+    if (descEl) descEl.textContent = t(`algorithms.${plugin.id}.desc`);
 
     const prevEl = container.querySelector(`[data-role-preview="${role}"]`);
     if (prevEl) prevEl.textContent = plugin.preview;
@@ -271,7 +272,7 @@ export function buildAlgorithmLab(container, callbacks) {
       subControls.style.display = 'flex';
       subControls.innerHTML = `
         <label class="lab-sub-item">
-          <span>Scrub Generation: <strong id="lab-gen-val">${maxGen}</strong></span>
+          <span>${t('lab.scrubGen')}: <strong id="lab-gen-val">${maxGen}</strong></span>
           <input type="range" id="lab-gen-slider" min="0" max="${maxGen}" value="${maxGen}" aria-label="Generation scrubber" />
         </label>
       `;
@@ -367,7 +368,7 @@ export function buildAlgorithmLab(container, callbacks) {
 
   // ─── Transport & Step Mode ───────────────────────────────────────
   function updatePlayBtnLabel(playing) {
-    playBtn.textContent = playing && !stepMode ? '⏸ Pause' : '▶ Play';
+    playBtn.textContent = playing && !stepMode ? t('lab.pause') : t('lab.play');
   }
 
   playBtn.addEventListener('click', () => {
@@ -375,7 +376,7 @@ export function buildAlgorithmLab(container, callbacks) {
       stepMode = false;
       setExternalVisualTime(null);
       resumePlayback();
-      captionEl.textContent = 'Live playback resumed.';
+      captionEl.textContent = t('lab.captionResumed');
       updatePlayBtnLabel(true);
       return;
     }
@@ -406,7 +407,7 @@ export function buildAlgorithmLab(container, callbacks) {
     stepTime = ev.time;
     setExternalVisualTime(stepTime);
     previewEvent(ev);
-    captionEl.textContent = `[Step ${stepCursor + 1}/${score.events.length}] ${formatEventCaption(ev)}`;
+    captionEl.textContent = `[${stepCursor + 1}/${score.events.length}] ${formatEventCaption(ev, getLang())}`;
     updatePlayBtnLabel(false);
   }
 
@@ -418,7 +419,7 @@ export function buildAlgorithmLab(container, callbacks) {
     stepCursor = 0;
     setExternalVisualTime(null);
     rebuildAndPlay();
-    captionEl.textContent = 'Replaying from start.';
+    captionEl.textContent = t('lab.captionReplay');
     updatePlayBtnLabel(true);
   });
 
@@ -544,11 +545,49 @@ export function buildAlgorithmLab(container, callbacks) {
     if (!stepMode) updatePlayBtnLabel(playing);
   }
 
+  function applyLanguage() {
+    for (const role of ROLE_ORDER) {
+      const titleEl = container.querySelector(`[data-role-title="${role}"]`);
+      if (titleEl) titleEl.textContent = t(`roles.${role}`);
+      const soloBtn = container.querySelector(`.lab-solo-btn[data-role="${role}"]`);
+      if (soloBtn) {
+        soloBtn.textContent = t('lab.solo');
+        soloBtn.title = `${t('lab.solo')} ${t(`roles.${role}`)}`;
+      }
+      const sel = container.querySelector(`.lab-alg-select[data-role="${role}"]`);
+      if (sel) {
+        for (const opt of sel.options) {
+          opt.textContent = t(`algorithms.${opt.value}.name`);
+        }
+      }
+    }
+    container.querySelectorAll('.lab-card-params-toggle').forEach(el => {
+      el.textContent = t('lab.parameters');
+    });
+    updatePlayBtnLabel(isAudioPlaying());
+    const sb = container.querySelector('#lab-step-back');
+    if (sb) sb.textContent = t('lab.stepBack');
+    const sf = container.querySelector('#lab-step-fwd');
+    if (sf) sf.textContent = t('lab.stepFwd');
+    const rb = container.querySelector('#lab-replay-btn');
+    if (rb) rb.textContent = t('lab.replay');
+    const sl = container.querySelector('#lab-speed-label');
+    if (sl) sl.textContent = t('lab.speed');
+    if (!stepMode && captionEl) captionEl.textContent = t('lab.captionDefault');
+    const wht = container.querySelector('#lab-what-hear-title');
+    if (wht) wht.textContent = t('lab.whatYouHear');
+    const whh = container.querySelector('#lab-what-hear-hint');
+    if (whh) whh.textContent = t('lab.whatYouHearHint');
+    renderAllCards(true);
+    if (isVisible) renderSubControls();
+  }
+
   return {
     setVisible,
     setHoveredTarget: setHovered,
     onScoreUpdated,
     syncAllFromParams,
-    syncPlayState
+    syncPlayState,
+    applyLanguage
   };
 }

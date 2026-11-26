@@ -499,3 +499,53 @@ Built a uniform plugin registry in `src/algorithms/registry.js` and updated `bui
 - **Tests & Docs (`tests/registry.test.js`, `README.md`)**: Added tests for Thue-Morse, Fibonacci Word, 3-bit Gray code, depth-2 Cantor pattern, and all 81 `(3 × 3 × 3 × 3)` role/algorithm combinations. Verified `npm test` and `npm run build` pass.
 
 ---
+
+## Prompt 15: Rebrand to EKTARA (একতারা) & Bilingual EN/বাংলা i18n
+
+Rebrand the app from "Recursive Garden" to "EKTARA" (একতারা), named after the
+one-stringed folk instrument of Bengal. Concept: "One string, one rule, infinite
+music." Taglines: EN "Where algorithms meet sound" and BN "একটি সূত্র, অসীম সুর".
+
+IMPORTANT: do NOT edit any existing entries in /prompt-log (they must stay verbatim
+as history). Only add new entries.
+
+1. Rename everywhere in the app: page `<title>`, welcome screen, header, panel
+   headings, README, `package.json` name (`"ektara"`), export filenames
+   (`ektara-<seed>-<depth>.wav` / `.json`), and the share link text.
+2. Build a lightweight i18n system (`src/i18n/`): `en.js` and `bn.js` dictionaries, a
+   `t(key)` function, and a language toggle (`EN | বাংলা`) visible on the welcome screen
+   and in the main header. Persist the choice in `localStorage`, set
+   `document.documentElement.lang` (`"en"` or `"bn"`), and switch all UI text live without
+   a reload: welcome text, every control label and tooltip, algorithm card names and
+   descriptions, Lab captions, presets, the guided explainer, status messages, and error
+   messages.
+3. Bengali typography: load "Noto Sans Bengali" (and "Hind Siliguri" as a fallback),
+   preferably self-hosted via `@fontsource` so the app works offline and on Vercel. Make
+   sure Bengali text is not clipped (use a slightly larger line-height, about 1.6),
+   and the layout handles longer strings without breaking (no fixed-width labels).
+4. Keep technical terms readable: show names like Norgard, Hanoi, Bjorklund, and
+   L-system in Latin script with a Bengali explanation beside them (e.g. "হ্যানয়ের মিনার
+   (Tower of Hanoi)"). Numbers can stay in Latin digits.
+5. Add the Bengali translations for the algorithm explanations in plain, friendly
+   language. Mark any translation you are unsure about with a `// TODO: review` comment
+   so I can check them.
+6. Add a small unit test that checks `en.js` and `bn.js` have exactly the same keys.
+
+Make sure `npm test` and `npm run build` pass. Save the prompt log.
+
+### Response
+
+Rebranded the application to **EKTARA (`একতারা`)** and implemented live **EN | বাংলা** bilingual support while leaving all existing `/prompt-log/prompt-log.md` entries untouched:
+- **Rebrand (`index.html`, `package.json`, `README.md`, `src/audio/export.js`, `src/ui/controls.js`, `src/main.js`)**:
+  - Updated `package.json` name to `"ektara"`, `<title>` to `EKTARA · একতারা`, welcome screen & workspace header branding, drawer heading, share link label (`🔗 Copy Share Link to EKTARA`), and `README.md`.
+  - Updated `buildExportFilename` and `exportParamsToJson` to produce `ektara-<seed>-<depth>.wav` / `.json` with `"app": "EKTARA"` (`"একতারা"`).
+- **Lightweight Bilingual i18n (`src/i18n/en.js`, `src/i18n/bn.js`, `src/i18n/index.js`)**:
+  - Added symmetric English and Bengali dictionaries plus `initI18n()`, `getLang()`, `setLang()`, `onLangChange()`, and `t(key, vars)` persisted via `localStorage` (`ektara-lang`) and mirrored onto `document.documentElement.lang`.
+  - Kept technical algorithm names (`Nørgård`, `Tower of Hanoi`, `Euclidean (Bjorklund)`, `L-System`, `Thue-Morse`, `Fibonacci Word`, `Gray Code`, `Cantor Set`, `Koch Curve`, `Sierpinski Triangle`) in Latin script alongside plain Bengali explanations, retained Latin digits, and annotated uncertain Bengali phrasings in `src/i18n/bn.js` with `// TODO: review`.
+  - Wired live language switching across `src/main.js`, `src/ui/controls.js`, `src/lab/labController.js`, `src/ui/paramEditors.js`, and `formatEventCaption(event, lang)` in `src/algorithms/meta.js` so switching `EN | বাংলা` updates every label cleanly without reloading.
+- **Self-Hosted Bengali Typography & Responsive CSS (`package.json`, `src/main.js`, `src/styles.css`)**:
+  - Installed and imported `@fontsource/noto-sans-bengali` and `@fontsource/hind-siliguri` weights `400` and `600` directly into the Vite bundle for offline and Vercel builds.
+  - Added `html[lang="bn"]` `line-height: 1.6` rules, flexible `.sound-label`/`.layer-label` sizing to prevent Bengali label clipping, and styled the welcome & header language bars cleanly across desktop and mobile viewports.
+- **Verification (`tests/i18n.test.js`, `tests/export.test.js`)**: Verified EN/BN key parity and export rebranding tests alongside the full suite (`6` test files, `69` tests passed in Vitest) and `npm run build` (`vite build` succeeded).
+
+---
