@@ -103,8 +103,16 @@ export async function exportScoreToWav(params, options = {}) {
   const mixSettings = options.mixSettings || {};
   const evolve = !!options.evolve;
   const onProgress = options.onProgress || (() => {});
+  const signal = options.signal;
   const totalRenderDuration = durationSeconds + EXPORT_TAIL_SECONDS;
   const seed = params?.seed ?? 42;
+
+  const checkAborted = () => {
+    if (signal?.aborted) {
+      throw new DOMException('Export cancelled', 'AbortError');
+    }
+  };
+  checkAborted();
 
   onProgress(10, 'Preparing recursive score...');
   const initialScore = buildScore(params);
@@ -112,7 +120,14 @@ export async function exportScoreToWav(params, options = {}) {
   // Temporarily make Math.random deterministic during Tone.Offline so
   // Reverb impulse responses and Noise buffer offsets match per seed.
   const originalRandom = Math.random;
+  const origPolyGC = Tone.PolySynth?.prototype?._collectGarbage;
   Math.random = createPRNG(seed);
+  if (Tone.PolySynth?.prototype) {
+    Tone.PolySynth.prototype._collectGarbage = function () {
+      if (this.context?.isOffline) return;
+      return origPolyGC?.apply(this, arguments);
+    };
+  }
 
   let progressTimer = null;
   let renderedBuffer;
@@ -127,7 +142,8 @@ export async function exportScoreToWav(params, options = {}) {
       onProgress(simulatedPct, 'Rendering audio offline...');
     }, 200);
 
-    renderedBuffer = await Tone.Offline(async ({ transport }) => {
+    const renderPromise = Tone.Offline(async ({ transport }) => {
+      checkAborted();
       const ambientType = mixSettings.ambientType ?? params.ambient ?? 'wind';
       const rainIntensity = mixSettings.rainIntensity ?? params.rainIntensity ?? 0.35;
       const thunderEnabled = mixSettings.thunderEnabled ?? params.thunderEnabled ?? true;
@@ -142,6 +158,7 @@ export async function exportScoreToWav(params, options = {}) {
         thunderEnabled,
         seed
       });
+      checkAborted();
 
       const targetDb = volumeToDb(mixSettings.masterVolume ?? 0.8, -6);
       // Match live 4-second fade-in, then gentle fade-out at end of tail
@@ -200,10 +217,26 @@ export async function exportScoreToWav(params, options = {}) {
       }
 
       transport.start(0);
-    }, totalRenderDuration, 2);
+    }, totalRenderDuration, 2, 44100);
+
+    if (signal) {
+      renderedBuffer = await Promise.race([
+        renderPromise,
+        new Promise((_, reject) => {
+          if (signal.aborted) reject(new DOMException('Export cancelled', 'AbortError'));
+          else signal.addEventListener('abort', () => reject(new DOMException('Export cancelled', 'AbortError')), { once: true });
+        })
+      ]);
+    } else {
+      renderedBuffer = await renderPromise;
+    }
+    checkAborted();
   } finally {
     if (progressTimer) clearInterval(progressTimer);
     Math.random = originalRandom;
+    if (Tone.PolySynth?.prototype && origPolyGC) {
+      Tone.PolySynth.prototype._collectGarbage = origPolyGC;
+    }
   }
 
   onProgress(88, 'Encoding 16-bit stereo WAV...');

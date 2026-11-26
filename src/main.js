@@ -55,7 +55,6 @@ const welcomeSoundHint = document.getElementById('welcome-sound-hint');
 const howLink = document.getElementById('how-it-works-link');
 const howTitle = document.getElementById('how-it-works-title');
 const howOneLiner = document.getElementById('how-it-works-oneliner');
-const footerBuiltFor = document.getElementById('footer-built-for');
 const aboutBtn = document.getElementById('about-name-btn');
 const aboutDialog = document.getElementById('about-name-dialog');
 const aboutClose = document.getElementById('about-dialog-close');
@@ -90,7 +89,6 @@ function applyStaticI18n() {
     if (el) el.textContent = t(key);
   }
 
-  if (footerBuiltFor) footerBuiltFor.textContent = t('welcome.footerBuiltFor');
   if (aboutBtn) aboutBtn.textContent = t('welcome.aboutNameBtn');
   const aboutTitle = document.getElementById('about-dialog-title');
   const aboutEn = document.getElementById('about-dialog-en');
@@ -355,6 +353,7 @@ beginBtn.addEventListener('click', async () => {
       setThunderMode,
       setLayerTimbre: audioMod.setLayerTimbre,
       setCurrentTheme,
+      setQualityMode: visualsMod.setQualityMode,
       toggleXRay,
       setZoomLevel,
       exportWav,
@@ -593,7 +592,7 @@ export function handleSetEvolve(enabled) {
   audioMod?.setEvolve(evolveEnabled);
 }
 
-export async function exportWav(durationSeconds, onProgress) {
+export async function exportWav(durationSeconds, onProgress, signal) {
   if (!exportMod) exportMod = await import('./audio/export.js');
   if (!audioMod) audioMod = await import('./audio/engine.js');
   const mixSettings = audioMod.getAudioMixSettings();
@@ -601,7 +600,8 @@ export async function exportWav(durationSeconds, onProgress) {
     durationSeconds,
     mixSettings,
     evolve: evolveEnabled,
-    onProgress
+    onProgress,
+    signal
   });
   exportMod.triggerBlobDownload(result.blob, result.filename);
   return result;

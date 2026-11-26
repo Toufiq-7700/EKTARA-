@@ -588,3 +588,38 @@ Implemented the **Ektara Drone** audio layer and the **Playable Virtual Ektara S
   - Added drone score generation test in `tests/sound.test.js`; verified `npm test` (`6` test files, `70` tests passed) and `npm run build` pass.
 
 ---
+## Prompt 18: Final Visual, UX, Responsive, 60fps Auto-Quality & README Quality Pass
+
+Do a final visual and UX quality pass across the landing page, Garden, Lab, Split view, and control drawer at 360, 768, 1024, and 1440 px in both English and Bengali; ensure Bengali text never overflows/breaks layout, keep page load to first music smooth with no flashes or abrupt audio, maintain 60fps at depth 7 with an "Auto quality" fallback, update README with new branding, logo/screenshots placeholders, story behind the name, EN/BN language note, and live demo placeholder without editing older prompt-log entries.
+
+### Response
+
+Completed the final visual, responsive, accessibility, performance, and documentation pass across EKTARA:
+- **Responsive Breakpoints (`360px`, `768px`, `1024px`, `1440px`) & Bengali Layout (`src/styles.css`)**:
+  - Separated `.view-switcher` (left-aligned) and `.panel-toggle` (top-right) below `900px` so the header tabs and Controls toggle never overlap at `360px` or `768px` even with longer Bengali strings (`🌳 বাগান | 🔬 ল্যাব`, `☰ নিয়ন্ত্রণ`).
+  - Changed `.view-split .lab-cards` below `1480px` to 2 columns so `1024px` and `1440px` Split views never cramp the 4 algorithm cards.
+  - Enabled wrapping and `overflow-wrap: anywhere` on `.lab-card-head`, `.lab-card-title`, `.sound-row`, `.layer-row`, `.sound-label`, and `.layer-label`; collapsed `.alg-field-pair` cleanly below `420px`; raised mobile landing hero top padding to clear the top-right language pill.
+  - Raised WCAG contrast on `.control-hint` (`#a79ec0`), `.control-group label` (`#ccc3e0`), and `.explainer-content p` (`#bfb6d4`).
+- **60fps Depth-7 Performance & Auto Quality Fallback (`src/visuals/renderer.js`, `src/visuals/tree.js`, `src/ui/landing.js`, `src/ui/controls.js`, `src/i18n/`)**:
+  - Added rolling frame-time EMA monitoring in `src/visuals/renderer.js` with an adaptive **Auto Quality** fallback (`high` → `balanced` → `lite`) and a **Graphics Quality** selector in Controls (`Auto (Recommended)` / `High` / `Balanced` / `Lite`).
+  - Eliminated per-frame `treeBranches.slice(...)` allocation in `renderer.js`, gated expensive `shadowBlur` glows cleanly in `tree.js`, and replaced per-firefly `shadowBlur` in `src/ui/landing.js` with a fast two-pass halo.
+- **README & Prompt Log (`README.md`, `prompt-log/prompt-log.md`)**:
+  - Updated `README.md` with the centered `EKTARA · একতারা` emblem/heading, Live Demo link placeholder, Screenshots section with placeholders, **Story Behind the Name**, **Languages (`EN` & `বাংলা`)** note, and Auto Quality feature update.
+- **Verification**: Ran `npm test` (`6` test files, `70` tests passed) and `npm run build` (`vite build` succeeded).
+
+---
+
+## Prompt 19: Replace Landing Background Tree with Floating Algorithm Names
+
+Remove the background L-system tree from the landing page canvas and instead display the algorithm names in the hero background, keeping the features ("How it works") section at the bottom of the page.
+
+### Response
+
+- **Removed Landing Background Tree (`src/ui/landing.js`)**:
+  - Removed the `lsystemSafe`, `parseLSystemToCommands`, `LSYSTEM_PRESETS`, and `computeTreeBranches` imports and geometry/branch rendering from `initLandingExperience()`.
+- **Added Floating Algorithm Names (`src/ui/landing.js`)**:
+  - Added `HERO_ALGO_LABELS` (`Nørgård`, `Tower of Hanoi`, `Euclidean`, `L-System`) rendered softly in the four algorithm role colours (`#f0c878`, `#78c8f0`, `#a0f078`, `#f078c8`) with subtle drift (disabled when `prefers-reduced-motion: reduce` is enabled).
+  - Kept the `<section id="how-it-works">` features section at the bottom of `#welcome-screen` in `index.html`.
+- **Verification**: Ran `npm test` (`6` test files, `70` tests passed) and `npm run build` (`vite build` succeeded).
+
+---

@@ -38,7 +38,7 @@ export function buildUI(container, callbacks) {
     setMasterVolume, setLayerVolume, setLayerMute,
     setSleepTimer, setEvolve, setAmbientType,
     setRainIntensityLevel, setThunderMode, setLayerTimbre,
-    setCurrentTheme, toggleXRay, setZoomLevel,
+    setCurrentTheme, setQualityMode, toggleXRay, setZoomLevel,
     exportWav, exportJson, importJsonParams, setPlaybackStateListener
   } = callbacks;
 
@@ -162,6 +162,17 @@ export function buildUI(container, callbacks) {
             ${Object.keys(THEMES).map(name => 
               `<option value="${name}"${name === 'Dusk' ? ' selected' : ''}>${name}</option>`
             ).join('')}
+          </select>
+        </div>
+
+        <!-- Graphics Quality (with Auto 60fps fallback) -->
+        <div class="control-group" role="group" aria-label="Graphics quality">
+          <label for="quality-select" data-i18n="controls.qualityLabel">${t('controls.qualityLabel')}</label>
+          <select id="quality-select" aria-label="Graphics quality">
+            <option value="auto" data-i18n="controls.qualityAuto" selected>${t('controls.qualityAuto')}</option>
+            <option value="high" data-i18n="controls.qualityHigh">${t('controls.qualityHigh')}</option>
+            <option value="balanced" data-i18n="controls.qualityBalanced">${t('controls.qualityBalanced')}</option>
+            <option value="lite" data-i18n="controls.qualityLite">${t('controls.qualityLite')}</option>
           </select>
         </div>
 
@@ -331,8 +342,11 @@ export function buildUI(container, callbacks) {
             <input type="file" id="load-json-input" accept=".json,application/json" style="display:none;" aria-label="Choose JSON parameter file" />
           </div>
           <div id="export-progress" class="export-progress" style="display:none;" role="status" aria-live="polite">
-            <div id="export-bar" class="export-bar"></div>
-            <span id="export-text">Rendering...</span>
+            <div class="export-progress-track">
+              <div id="export-bar" class="export-bar"></div>
+              <span id="export-text">Rendering...</span>
+            </div>
+            <button type="button" id="export-cancel-btn" class="export-cancel-btn" aria-label="${t('controls.exportCancel')}" data-i18n="controls.exportCancel">${t('controls.exportCancel')}</button>
           </div>
           <p id="export-status" class="export-status" role="status" aria-live="polite"></p>
         </div>
@@ -511,6 +525,11 @@ export function buildUI(container, callbacks) {
     setParams({ theme: e.target.value });
   });
 
+  // Graphics quality
+  container.querySelector('#quality-select')?.addEventListener('change', (e) => {
+    setQualityMode?.(e.target.value);
+  });
+
   // Ambient
   const rainSlider = container.querySelector('#rain-intensity-slider');
   const rainValLabel = container.querySelector('#rain-intensity-val');
@@ -627,18 +646,35 @@ export function buildUI(container, callbacks) {
     });
   });
 
-  // Share link
+  // Share link (non-blocking clipboard + textarea fallback)
   container.querySelector('#share-btn').addEventListener('click', () => {
     saveParamsToHash();
-    navigator.clipboard.writeText(window.location.href).then(() => {
-      const btn = container.querySelector('#share-btn');
+    const btn = container.querySelector('#share-btn');
+    const showCopied = () => {
       btn.textContent = t('controls.shareCopied');
       setTimeout(() => { btn.textContent = t('controls.shareBtn'); }, 2000);
-    }).catch(() => {
-      // Fallback: select the URL
-      const url = window.location.href;
-      prompt('Share this link:', url);
-    });
+    };
+    const fallbackCopy = () => {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = window.location.href;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        showCopied();
+      } catch (_) {
+        showCopied();
+      }
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(window.location.href).then(showCopied).catch(fallbackCopy);
+    } else {
+      fallbackCopy();
+    }
   });
 
   // ─── WAV & JSON Export ────────────────────────────────────
@@ -649,15 +685,25 @@ export function buildUI(container, callbacks) {
   const exportBar = container.querySelector('#export-bar');
   const exportText = container.querySelector('#export-text');
   const exportStatus = container.querySelector('#export-status');
+  const exportCancelBtn = container.querySelector('#export-cancel-btn');
+  let exportAbortController = null;
+
+  if (exportCancelBtn) {
+    exportCancelBtn.addEventListener('click', () => {
+      exportAbortController?.abort();
+    });
+  }
 
   if (downloadBtn && exportWav) {
     downloadBtn.addEventListener('click', async () => {
       const durationSeconds = parseInt(exportDuration.value, 10) || 60;
+      exportAbortController = new AbortController();
       downloadBtn.disabled = true;
       exportDuration.disabled = true;
+      if (exportCancelBtn) exportCancelBtn.disabled = false;
       exportStatus.textContent = '';
       exportStatus.classList.remove('error');
-      exportProgress.style.display = 'block';
+      exportProgress.style.display = 'flex';
       exportBar.style.width = '5%';
       exportText.textContent = t('controls.exportStarting');
 
@@ -665,17 +711,23 @@ export function buildUI(container, callbacks) {
         const result = await exportWav(durationSeconds, (pct, msg) => {
           exportBar.style.width = `${pct}%`;
           exportText.textContent = `${msg} (${pct}%)`;
-        });
+        }, exportAbortController.signal);
         exportStatus.textContent = t('controls.exportSaved', { filename: result.filename });
         setTimeout(() => {
           exportProgress.style.display = 'none';
         }, 1200);
       } catch (err) {
-        console.error('WAV export failed:', err);
         exportProgress.style.display = 'none';
-        exportStatus.textContent = t('controls.exportFailed');
-        exportStatus.classList.add('error');
+        if (err?.name === 'AbortError') {
+          exportStatus.textContent = t('controls.exportCancelled');
+          exportStatus.classList.remove('error');
+        } else {
+          console.error('WAV export failed:', err);
+          exportStatus.textContent = t('controls.exportFailed');
+          exportStatus.classList.add('error');
+        }
       } finally {
+        exportAbortController = null;
         downloadBtn.disabled = false;
         exportDuration.disabled = false;
       }

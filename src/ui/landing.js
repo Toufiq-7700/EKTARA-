@@ -3,20 +3,22 @@
  *
  * Renders:
  *  - Full-screen animated night-river backdrop with drifting stars, soft mist,
- *    a slow-growing low-CPU L-system tree (fixed seed 137), fireflies, and
- *    an interactive glowing vertical "ektara string" that vibrates on hover/touch
- *    and plucks on Begin.
+ *    subtle floating algorithm names in the role colours, and fireflies.
  *  - Four compact mini-canvas animations in the "How it works" cards.
  *  - Respects `prefers-reduced-motion: reduce` (renders clean static frames).
  */
 
-import { lsystemSafe, parseLSystemToCommands, LSYSTEM_PRESETS } from '../algorithms/lsystem.js';
-import { computeTreeBranches } from '../visuals/tree.js';
 import { createPRNG } from '../algorithms/prng.js';
+
+const HERO_ALGO_LABELS = [
+  { text: 'Nørgård', x: 0.16, y: 0.24, color: '240, 200, 120', phase: 0.0 },
+  { text: 'Tower of Hanoi', x: 0.82, y: 0.27, color: '120, 200, 240', phase: 1.6 },
+  { text: 'Euclidean', x: 0.18, y: 0.76, color: '160, 240, 120', phase: 3.1 },
+  { text: 'L-System', x: 0.82, y: 0.74, color: '240, 120, 200', phase: 4.7 }
+];
 
 export function initLandingExperience() {
   const heroCanvas = document.getElementById('landing-canvas');
-  const stringZone = document.getElementById('ektara-string-zone');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   if (!heroCanvas) {
@@ -30,21 +32,7 @@ export function initLandingExperience() {
   let height = window.innerHeight;
   let startTime = performance.now();
 
-  // String interaction state (purely visual)
-  let stringHover = false;
-  let stringPluckAmp = 0;
-  let stringPluckTime = 0;
-
-  // Fixed-seed background L-system tree (computed once for low CPU cost)
   const rng = createPRNG(137);
-  const preset = LSYSTEM_PRESETS['Fern'];
-  const lsys = lsystemSafe(preset.axiom, preset.rules, 4);
-  const lsysCommands = parseLSystemToCommands(lsys.result);
-  const branchAngles = Array.from({ length: 32 }, (_, i) => {
-    const sign = i % 2 === 0 ? 1 : -1;
-    return preset.angle + sign * ((i * 7) % 5);
-  });
-  let cachedBranches = [];
 
   // Stars & fireflies
   const stars = Array.from({ length: 75 }, () => ({
@@ -65,19 +53,6 @@ export function initLandingExperience() {
     hue: rng() > 0.45 ? '#f5cf86' : '#a0f078'
   }));
 
-  function rebuildTreeGeometry() {
-    cachedBranches = computeTreeBranches(
-      lsysCommands,
-      branchAngles,
-      preset.angle,
-      width * 0.5,
-      height * 0.86,
-      Math.min(height * 0.62, 520),
-      4,
-      0.72
-    );
-  }
-
   function resizeHero() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     width = window.innerWidth;
@@ -87,7 +62,6 @@ export function initLandingExperience() {
     heroCanvas.style.width = `${width}px`;
     heroCanvas.style.height = `${height}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    rebuildTreeGeometry();
   }
 
   resizeHero();
@@ -96,17 +70,6 @@ export function initLandingExperience() {
     if (reducedMotion) drawHeroFrame(0);
   };
   window.addEventListener('resize', onResize);
-
-  if (stringZone) {
-    stringZone.addEventListener('pointerenter', () => { stringHover = true; });
-    stringZone.addEventListener('pointerleave', () => { stringHover = false; });
-    stringZone.addEventListener('touchstart', () => {
-      stringHover = true;
-      stringPluckAmp = Math.max(stringPluckAmp, 9);
-      stringPluckTime = performance.now();
-    }, { passive: true });
-    stringZone.addEventListener('touchend', () => { stringHover = false; }, { passive: true });
-  }
 
   function drawHeroFrame(elapsedSec) {
     // 1. Night-river gradient
@@ -138,89 +101,38 @@ export function initLandingExperience() {
     ctx.fillStyle = mist;
     ctx.fillRect(0, height * 0.72, width, height * 0.28);
 
-    // 4. Slow-growing generative L-system tree (low intensity, background)
-    const growthProgress = reducedMotion ? 1 : Math.min(1, 0.18 + elapsedSec * 0.085);
-    const maxVisibleDepth = growthProgress * 4.2;
-    const swayBase = reducedMotion ? 0 : Math.sin(elapsedSec * 0.55) * 4;
-
+    // 4. Floating algorithm names in background (replaces background tree)
+    const fontSize = Math.round(Math.max(22, Math.min(width * 0.052, 64)));
     ctx.save();
-    ctx.lineCap = 'round';
-    for (let i = 0; i < cachedBranches.length; i++) {
-      const b = cachedBranches[i];
-      if (b.depth > maxVisibleDepth) continue;
-      const depthFade = Math.max(0.08, 0.34 - b.depth * 0.055);
-      const sway = swayBase * (b.depth / 4);
-      ctx.strokeStyle = b.depth <= 1
-        ? `rgba(140, 185, 165, ${depthFade})`
-        : `rgba(120, 215, 175, ${depthFade})`;
-      ctx.lineWidth = Math.max(0.7, 2.8 - b.depth * 0.55);
-      ctx.beginPath();
-      ctx.moveTo(b.x1 + sway * 0.4, b.y1);
-      ctx.lineTo(b.x2 + sway, b.y2);
-      ctx.stroke();
+    ctx.font = `700 ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const label of HERO_ALGO_LABELS) {
+      const driftY = reducedMotion ? 0 : Math.sin(elapsedSec * 0.45 + label.phase) * 8;
+      const driftX = reducedMotion ? 0 : Math.cos(elapsedSec * 0.3 + label.phase) * 5;
+      const pulse = reducedMotion ? 0.1 : 0.08 + 0.04 * Math.sin(elapsedSec * 0.7 + label.phase);
+      ctx.fillStyle = `rgba(${label.color}, ${pulse.toFixed(3)})`;
+      ctx.fillText(label.text, label.x * width + driftX, label.y * height + driftY);
     }
     ctx.restore();
 
-    // 5. Drifting fireflies
+    // 5. Drifting fireflies (lightweight two-pass halo — avoids expensive per-dot shadowBlur)
+    ctx.save();
     for (const f of fireflies) {
       const fx = (((f.x + (reducedMotion ? 0 : elapsedSec * f.speedX)) % 1 + 1) % 1) * width;
       const fy = (((f.y + (reducedMotion ? 0 : elapsedSec * f.speedY + Math.sin(elapsedSec + f.phase) * 0.015)) % 0.85 + 0.85) % 0.85) * height;
       const glow = reducedMotion ? 0.55 : 0.3 + 0.55 * Math.sin(elapsedSec * 1.8 + f.phase);
-      ctx.save();
-      ctx.globalAlpha = Math.max(0.12, glow);
+      const a = Math.max(0.12, glow);
+      ctx.globalAlpha = a * 0.22;
       ctx.fillStyle = f.hue;
-      ctx.shadowColor = f.hue;
-      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(fx, fy, f.r * 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = a;
       ctx.beginPath();
       ctx.arc(fx, fy, f.r, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
     }
-
-    // 6. Vertical glowing "ektara string" down the center
-    const cx = width * 0.5;
-    const topY = height * 0.05;
-    const botY = height * 0.94;
-    const span = botY - topY;
-
-    let amp = reducedMotion ? 0 : (stringHover ? 7.5 : 2.2);
-    let freq = stringHover ? 26 : 5.2;
-    if (!reducedMotion && stringPluckAmp > 0.15) {
-      const age = (performance.now() - stringPluckTime) / 1000;
-      const decayed = stringPluckAmp * Math.exp(-age * 3.4);
-      amp += decayed;
-      freq = 34;
-      if (decayed < 0.15) stringPluckAmp = 0;
-    }
-
-    ctx.save();
-    ctx.strokeStyle = stringHover || stringPluckAmp > 0.5
-      ? 'rgba(255, 212, 138, 0.82)'
-      : 'rgba(240, 178, 102, 0.42)';
-    ctx.lineWidth = stringHover || stringPluckAmp > 0.5 ? 2 : 1.3;
-    ctx.shadowColor = 'rgba(240, 168, 96, 0.75)';
-    ctx.shadowBlur = stringHover || stringPluckAmp > 0.5 ? 18 : 10;
-
-    ctx.beginPath();
-    const steps = 42;
-    for (let i = 0; i <= steps; i++) {
-      const u = i / steps;
-      const y = topY + u * span;
-      // Standing wave envelope (pinned at top and bottom)
-      const envelope = Math.sin(u * Math.PI);
-      const wave = Math.sin(elapsedSec * freq + u * Math.PI * 2) * amp * envelope;
-      const x = cx + wave;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-
-    // Soft anchor nodes at top & bottom of the string
-    ctx.fillStyle = 'rgba(246, 201, 142, 0.75)';
-    ctx.beginPath();
-    ctx.arc(cx, topY, 3, 0, Math.PI * 2);
-    ctx.arc(cx, botY, 3.5, 0, Math.PI * 2);
-    ctx.fill();
     ctx.restore();
   }
 
@@ -427,11 +339,7 @@ export function initLandingExperience() {
   }
 
   return {
-    pluckString() {
-      stringPluckAmp = 22;
-      stringPluckTime = performance.now();
-      if (reducedMotion) drawHeroFrame(0);
-    },
+    pluckString() {},
     destroy() {
       destroyed = true;
       if (rafId) cancelAnimationFrame(rafId);

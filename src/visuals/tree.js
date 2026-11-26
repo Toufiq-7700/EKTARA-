@@ -161,10 +161,13 @@ export function drawTree(
     highlightedBranchIdx = null,
     highlightColor = '#f0c878',
     lineThickness = 6,
-    leafDensity = 0.7
+    leafDensity = 0.7,
+    shadowBlurGlow = true,
+    visibleCount = branches.length
   } = {}
 ) {
   if (!branches || branches.length === 0) return;
+  const count = Math.min(branches.length, Math.max(1, visibleCount));
 
   // Build a set of active branch indices from melody role events (Nørgård, Thue-Morse, Fibonacci)
   const activeBranches = new Set();
@@ -177,7 +180,8 @@ export function drawTree(
     }
   }
 
-  for (const branch of branches) {
+  for (let i = 0; i < count; i++) {
+    const branch = branches[i];
     // Apply wind sway
     let swayX = 0, swayY = 0;
     if (!reducedMotion) {
@@ -209,16 +213,20 @@ export function drawTree(
     if (isHighlighted) {
       ctx.save();
       ctx.strokeStyle = highlightColor;
-      ctx.shadowColor = highlightColor;
-      ctx.shadowBlur = 18;
+      if (shadowBlurGlow) {
+        ctx.shadowColor = highlightColor;
+        ctx.shadowBlur = 14;
+      }
       ctx.stroke();
       ctx.restore();
     } else if (isActive) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.strokeStyle = theme.tree.glow;
-      ctx.shadowColor = theme.tree.glow;
-      ctx.shadowBlur = 14;
+      if (shadowBlurGlow) {
+        ctx.shadowColor = theme.tree.glow;
+        ctx.shadowBlur = 10;
+      }
       ctx.stroke();
       ctx.restore();
     } else {

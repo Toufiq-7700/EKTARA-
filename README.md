@@ -1,13 +1,31 @@
-# 🪕 EKTARA
+<div align="center">
+  <h1>🪕 EKTARA · একতারা</h1>
+  <p><strong>One string, one rule, infinite music.</strong><br/>
+  <em>Where algorithms meet sound · একটি সূত্র, অসীম সুর</em></p>
+  <p><a href="https://your-ektara-demo.vercel.app"><strong>🌐 Live Demo (Placeholder)</strong></a></p>
+</div>
 
-> **One string, one rule, infinite music.**
-> *Where algorithms meet sound*
+**EKTARA (`একতারা`)** is an interactive audiovisual meditation where four recursive algorithms weave together melody, bass lines, rhythm, an interactive Ektara drone string, and living fractal visuals — all from a single seed and shared clock. Everything is deterministic: the same seed always reproduces the same composition, playable live in the browser and exportable to 16-bit stereo WAV with no audio files required.
 
-**EKTARA** is an interactive audiovisual experience where four classical recursive algorithms work together to generate melody, bass lines, rhythm, and living fractal visuals — all from a single seed number and a shared clock. Everything is deterministic: the same seed always produces the same composition.
+---
 
-The project demonstrates how simple mathematical rules, applied recursively, can create complex and beautiful musical structures. No audio samples are used — every sound is synthesized procedurally in the browser using Tone.js.
+## Story Behind the Name
 
-> 📸 _Screenshot placeholder: add a screenshot or animated GIF of EKTARA in Split View here before publishing._
+The **Ektara** (`একতারা`, literally *"one string"*) is Bengal's iconic one-stringed folk instrument played by Baul mystic minstrels. From one resonator, a split bamboo neck, and a single plucked string bent subtly by hand pressure, players conjure shifting harmonies and timeless melodies. EKTARA applies that philosophy to recursive computing: *one string, one rule, infinite music* — and places a playable virtual ektara directly inside the Garden alongside an evolving soft drone layer.
+
+---
+
+## Languages (`EN` & `বাংলা`)
+
+EKTARA supports live **English (`EN`)** and **Bengali (`বাংলা`)** switching (`src/i18n/`) across the landing screen, workspace controls, role cards, descriptions, and explainer using self-hosted `@fontsource/noto-sans-bengali` and `@fontsource/hind-siliguri` fonts (offline & Vercel ready). Technical algorithm terms (`Nørgård`, `Tower of Hanoi`, `Euclidean (Bjorklund)`, `L-System`, `Thue-Morse`, `Fibonacci Word`, `Gray Code`, `Cantor Set`) stay readable in Latin script alongside plain Bengali explanations.
+
+---
+
+## Screenshots
+
+| Landing Hero (`100vh` + Algorithm Backdrop) | Split View (Garden + Algorithm Lab) | Mobile & Bengali (`বাংলা`) Mode |
+|---|---|---|
+| 📸 _Placeholder: Landing hero screenshot showing floating algorithm names & Ektara emblem_ | 📸 _Placeholder: Desktop Split View showing Garden canvas + Lab simulation_ | 📸 _Placeholder: 360px mobile view in বাংলা_ |
 
 ---
 
@@ -48,14 +66,21 @@ The project demonstrates how simple mathematical rules, applied recursively, can
 - **Ambient atmosphere** — procedural wind, layered rain with canopy splashes, distant thunder
 - **Themes** — Dusk, Moss, Moonlight, Ember color palettes
 - **URL sharing** — full parameter state encoded in the URL hash
-- **Safety-capped** — score builder limits output to 4,000 events to prevent browser freezes
-- **69 unit tests** covering algorithms, registry combos, exports, sound, rain, and i18n
+- **Safety-capped & Auto Quality** — score builder limits output to 4,000 events and adaptive Auto Quality scales glow/rain automatically to sustain 60fps at depth 7
+- **70 unit tests** covering algorithms, registry combos, exports, sound, rain, and i18n
 
 ---
 
 ## The Four Recursive Algorithms
 
 Every parameter feeds into pure, deterministic recursive functions in `src/algorithms/` that produce a single timed event **score** (`buildScore`). Live playback, 60fps Canvas 2D visuals, Lab simulations, and offline WAV export all consume that exact same score.
+
+| Role | Default Algorithm | Musical / Visual Output | Key Parameters |
+|---|---|---|---|
+| **◆ Melody** | **Nørgård Infinity Series** | Self-similar scale melody + octave canon | Length, offset, interval step `d`, canon layers & speed |
+| **▬ Bass** | **Tower of Hanoi** | Disc-size pitch/duration bass + luminous pillars | Discs (2–8), start/target pegs, peg intervals, move limit |
+| **● Rhythm** | **Euclidean (Bjorklund)** | Evenly spaced percussion + orbiting firefly ring | Rings (1–3), pulses `k`, steps `n`, rotation, accent |
+| **▲ Visual Tree** | **L-System** | Fractal tree whose branch angles track melody | Axiom, rules, generations (1–8), turn angle, leaf density |
 
 ### 🎵 Melody — Nørgård Infinity Series
 
@@ -333,18 +358,24 @@ EKTARA-/
 │   │   └── timelineStrip.js   # "What You Hear" 4-lane role piano roll
 │   ├── ui/
 │   │   ├── controls.js        # Collapsible control drawer, presets, JSON import/export
-│   │   └── paramEditors.js    # Shared per-algorithm parameter editors & rule validator
+│   │   ├── landing.js         # Immersive landing backdrop & How It Works mini-canvases
+│   │   ├── paramEditors.js    # Shared per-algorithm parameter editors & rule validator
+│   │   └── tour.js            # Dismissible first-visit tooltip tour
 │   ├── visuals/
 │   │   ├── atmosphere.js      # Sky darkening, stars, rain ground mist, vignette
+│   │   ├── ektaraString.js    # Playable virtual Ektara string & light ripples
 │   │   ├── fireflies.js       # Euclidean firefly ring & polygon
 │   │   ├── hanoi.js           # Luminous pillars, disc arcs & landing ripples
 │   │   ├── rain.js            # 3-layer pooled rainfall (1500 max), splashes & canopy glints
-│   │   ├── renderer.js        # 60fps Canvas 2D orchestrator & linked hover hit-testing
+│   │   ├── renderer.js        # 60fps Canvas 2D orchestrator, Auto Quality & hover hit-test
 │   │   ├── themes.js          # Dusk, Moss, Moonlight, and Ember palettes
 │   │   ├── tree.js            # Normalized L-system tree, glow, wind sway & petals
 │   │   └── xray.js            # Recursion X-Ray overlay
-│   ├── main.js                # Entry point, i18n, Bengali fonts, debounced updates, view switcher
+│   ├── main.js                # Entry point, i18n, Bengali fonts, lazy load, view switcher
 │   └── styles.css             # Responsive Split/Lab/Garden & accessible UI styles
+├── public/
+│   ├── favicon.svg            # Self-hosted Ektara vector favicon
+│   └── og-image.png           # Self-hosted 1200x630 Open Graph preview image
 ├── tests/
 │   ├── algorithms.test.js     # Core math, validation, safety cap & depth 1–8 tests
 │   ├── export.test.js         # WAV encoder, filenames & JSON export tests
@@ -352,6 +383,7 @@ EKTARA-/
 │   ├── rain.test.js           # Rain particle pool & audio parameter tests
 │   ├── registry.test.js       # New algorithm sequences & all 81 role combos tests
 │   └── sound.test.js          # Timbre & seeded humanisation tests
+├── LICENSE
 ├── index.html
 ├── package.json
 ├── vite.config.js
@@ -367,7 +399,7 @@ EKTARA-/
 - **Audio Synthesis & Offline Rendering:** Tone.js
 - **Graphics:** HTML5 Canvas 2D (60fps, `devicePixelRatio` aware)
 - **Typography:** Self-hosted `@fontsource/noto-sans-bengali` & `@fontsource/hind-siliguri`
-- **Testing:** Vitest (69 tests across 6 test files)
+- **Testing:** Vitest (70 tests across 6 test files)
 
 ---
 

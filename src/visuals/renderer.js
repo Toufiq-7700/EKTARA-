@@ -55,6 +55,14 @@ let externalTime = null;
 let hoveredTarget = null;
 let ektaraStringState = createEktaraStringState();
 let getAudioLevelFn = null;
+
+// Auto-Quality adaptive performance controller (keeps 60fps at depth 7)
+let qualityMode = 'auto';        // 'auto' | 'high' | 'balanced' | 'lite'
+let resolvedQuality = 'high';    // 'high' | 'balanced' | 'lite'
+let avgFrameMs = 16.6;
+let slowFrames = 0;
+let fastFrames = 0;
+let userRainIntensity = 0.35;
 const visibleAlgorithms = {
   melody: true,
   bass: true,
@@ -272,9 +280,26 @@ export function pluckGardenString(normalizedPos = 0.5, noteLabel = '') {
  * Set target rain intensity (0 = off, 1 = downpour) smoothly.
  */
 export function setVisualRainIntensity(intensity) {
+  userRainIntensity = Math.max(0, Math.min(1, Number(intensity) || 0));
   if (rainState) {
-    setRainIntensityTarget(rainState, intensity);
+    const scale = resolvedQuality === 'lite' ? 0.35 : resolvedQuality === 'balanced' ? 0.65 : 1;
+    setRainIntensityTarget(rainState, userRainIntensity * scale);
   }
+}
+
+export function setQualityMode(mode) {
+  if (['auto', 'high', 'balanced', 'lite'].includes(mode)) {
+    qualityMode = mode;
+    if (mode !== 'auto') resolvedQuality = mode;
+    else resolvedQuality = 'high';
+    slowFrames = 0;
+    fastFrames = 0;
+    setVisualRainIntensity(userRainIntensity);
+  }
+}
+
+export function getQualityStatus() {
+  return { mode: qualityMode, active: resolvedQuality, avgFrameMs: Math.round(avgFrameMs) };
 }
 
 /**
@@ -412,10 +437,38 @@ export function hitTestGarden(clientX, clientY) {
 function animate(now) {
   if (!isRunning) return;
 
-  const rawDt = Math.min((now - lastTime) / 1000, 0.05);
+  const rawFrameMs = now - lastTime;
+  const rawDt = Math.min(rawFrameMs / 1000, 0.05);
   lastTime = now;
   const motionDt = reducedMotion ? rawDt * 0.35 : rawDt;
   elapsedTime += motionDt;
+
+  // Auto quality fallback if frame times degrade (e.g., depth 7 on slower GPUs)
+  if (rawFrameMs > 0 && rawFrameMs < 200) {
+    avgFrameMs = avgFrameMs * 0.92 + rawFrameMs * 0.08;
+    if (qualityMode === 'auto') {
+      if (avgFrameMs > 24) {
+        slowFrames++;
+        fastFrames = 0;
+        if (slowFrames > 45) {
+          const next = resolvedQuality === 'high' ? 'balanced' : 'lite';
+          if (next !== resolvedQuality) {
+            resolvedQuality = next;
+            setVisualRainIntensity(userRainIntensity);
+          }
+          slowFrames = 0;
+        }
+      } else if (avgFrameMs < 15.5) {
+        fastFrames++;
+        slowFrames = 0;
+        if (fastFrames > 180 && resolvedQuality !== 'high') {
+          resolvedQuality = resolvedQuality === 'lite' ? 'balanced' : 'high';
+          setVisualRainIntensity(userRainIntensity);
+          fastFrames = 0;
+        }
+      }
+    }
+  }
 
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.width / dpr;
@@ -481,10 +534,7 @@ function animate(now) {
 
   // Layer 2: The L-system / Fractal tree (hero)
   if (isRoleVisible('tree') && treeBranches.length > 0) {
-    const visibleBranches = treeBranches.slice(
-      0,
-      Math.max(1, Math.floor(treeBranches.length * growthProgress))
-    );
+    const visibleCount = Math.max(1, Math.floor(treeBranches.length * growthProgress));
     const windPhase = elapsedTime * 0.5 + windValue * 0.6;
     const isMelOrTreeHl = hoveredTarget && (
       hoveredTarget.role === 'melody' ||
@@ -497,14 +547,19 @@ function animate(now) {
       ? '#f078c8'
       : '#f0c878';
     const lCfg = currentScore?.lsystemConfig || currentScore?.params?.lsystem || {};
-    drawTree(ctx, visibleBranches, currentTheme, activeEvents, elapsedTime, windPhase, reducedMotion, {
+    const effLeafDensity = resolvedQuality === 'lite' ? 0 : (lCfg.leafDensity ?? 0.7);
+    drawTree(ctx, treeBranches, currentTheme, activeEvents, elapsedTime, windPhase, reducedMotion, {
       glowEnabled: isRoleVisible('melody'),
       highlightedBranchIdx: branchHl,
       highlightColor: hlColor,
       lineThickness: lCfg.lineThickness ?? 6,
-      leafDensity: lCfg.leafDensity ?? 0.7
+      leafDensity: effLeafDensity,
+      shadowBlurGlow: resolvedQuality === 'high',
+      visibleCount
     });
-    updateAndDrawParticles(ctx, particles, currentTheme, elapsedTime, groundY);
+    if (resolvedQuality !== 'lite') {
+      updateAndDrawParticles(ctx, particles, currentTheme, elapsedTime, groundY);
+    }
   }
 
   // Layer 3: Firefly ring (rhythm role)

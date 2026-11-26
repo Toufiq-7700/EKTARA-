@@ -5,6 +5,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>EKTARA · একতারা</title>
+  <meta name="description" content="EKTARA (একতারা) — One string, one rule, infinite music. An interactive generative audiovisual instrument weaving Nørgård melodies, Tower of Hanoi bass, Euclidean rhythms, and L-system fractals." />
+  <meta name="theme-color" content="#070816" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta property="og:title" content="EKTARA · একতারা — One string, one rule, infinite music." />
+  <meta property="og:description" content="Four recursive algorithms weave melody, bass, rhythm, an interactive Ektara drone string, and living fractal visuals from a single seed." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/og-image.png" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:locale:alternate" content="bn_BD" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="EKTARA · একতারা" />
+  <meta name="twitter:description" content="One string, one rule, infinite music." />
+  <meta name="twitter:image" content="/og-image.png" />
   <link rel="stylesheet" href="/src/styles.css" />
 </head>
 
@@ -13,7 +26,6 @@
   <main id="welcome-screen" class="welcome-screen" aria-label="EKTARA Welcome">
     <section class="landing-hero" aria-labelledby="welcome-title">
       <canvas id="landing-canvas" class="landing-canvas" aria-hidden="true"></canvas>
-      <div id="ektara-string-zone" class="ektara-string-zone" aria-hidden="true"></div>
 
       <div class="welcome-lang-bar" role="group" aria-label="Language selector">
         <button type="button" class="lang-btn active" data-lang="en" aria-pressed="true">EN</button>
@@ -84,8 +96,6 @@
         </div>
 
         <footer class="landing-footer">
-          <span id="footer-built-for">Built for [HUB'S QUEST • EPOCH 1 ]</span>
-          <span class="footer-dot" aria-hidden="true">·</span>
           <button type="button" id="about-name-btn" class="about-name-btn">About the name</button>
         </footer>
       </div>
