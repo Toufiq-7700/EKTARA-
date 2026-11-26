@@ -623,3 +623,42 @@ Remove the background L-system tree from the landing page canvas and instead dis
 - **Verification**: Ran `npm test` (`6` test files, `70` tests passed) and `npm run build` (`vite build` succeeded).
 
 ---
+
+## Prompt 20: Pre-Deployment Audit for Vercel & Hackathon Submission
+
+Run a full pre-deployment audit across build/tests, Vercel readiness, live production functional checks, audio WAV export (30s/1m/3m, determinism, clipping, cancellation), sound safety, accessibility/responsiveness (360/768/1024/1440 px in EN and BN), and repository/submission hygiene; fix every FAIL and small safe WARN without editing existing prompt-log entries, then run `npm test` and `npm run build`.
+
+### Response
+
+Completed the full pre-deployment audit against `npm run preview` and headless Chromium, and applied targeted fixes:
+- **Root License, Self-Hosted Assets & Meta/Open Graph Tags (`LICENSE`, `public/favicon.svg`, `public/og-image.png`, `index.html`)**:
+  - Added MIT `LICENSE`, self-hosted vector `public/favicon.svg`, self-hosted 1200×630 `public/og-image.png`, `<meta name="description">`, `<meta name="theme-color">`, `<link rel="icon">`, and Open Graph / Twitter metadata in `index.html`, eliminating `/favicon.ico` 404 errors.
+- **Non-Blocking Share Fallback (`src/ui/controls.js`)**:
+  - Replaced the blocking `window.prompt('Share this link:', url)` fallback when `navigator.clipboard.writeText` rejects with a non-blocking `<textarea>` `document.execCommand('copy')` fallback.
+- **WAV Export 44.1 kHz Parity, Offline Voice-Pool Fix & Cancellation (`src/audio/export.js`, `src/ui/controls.js`, `src/main.js`, `src/i18n/en.js`, `src/i18n/bn.js`)**:
+  - Pinned `Tone.Offline` export sample rate to `44100` Hz (matching README spec), disabled `Tone.PolySynth._collectGarbage` during offline renders to stop extra voice allocation leaks, and added `AbortSignal` + a localized Cancel button (`#export-cancel-btn`) so users can cancel mid-render cleanly.
+- **Mobile 44px Touch Targets & README Accuracy (`src/styles.css`, `README.md`)**:
+  - Raised mobile (`<= 768px`) interactive control touch targets (`.view-tab`, `.panel-toggle`, `.panel-close-btn`, `.transport-btn`, `.preset-btn`, `.download-btn`, `.share-btn`, `.dice-btn`, `.mute-btn`, `.lab-btn`, `.lab-solo-btn`, `.alg-mini-btn`, `.lang-btn`, `.about-name-btn`, `.tour-skip-btn`, `.tour-next-btn`, `.lab-switch`, `select`, `input[type="number"]`) to `>= 44px`.
+  - Updated `README.md` test count (`69` → `70`), updated the landing screenshot placeholder caption, added a 4-row summary table under `## The Four Recursive Algorithms`, and updated `Project Structure`.
+- **Verification**: Ran `npm test` (`6` test files, `70` tests passed) and `npm run build` (`vite build` succeeded).
+
+---
+
+
+## Prompt 21: Fix Slow / Failing WAV Download, Verify Fast Export, Commit & Push
+
+> it cant download the WAV format. fix this issues, test it will download fast, then commit and push
+
+### Response
+
+Fixed WAV export speed, audio-graph reliability, and blob download handling in `src/audio/export.js`:
+- **Root Causes**:
+  - `Tone.Offline` rendered 60+ persistent Tone.js Web Audio nodes (`FMSynth` polyphony pools, `fatsine`, `MetalSynth`, `Tone.Reverb(6s)` FFT convolver) sequentially on Chromium's `OfflineAudioContext`, taking `53s–116s` for a 30s export and timing out on 1m/3m exports.
+  - `triggerBlobDownload` revoked the object URL after `1000ms` before slower download managers could finish reading large WAV blobs.
+- **Fixes (`src/audio/export.js`)**:
+  - Replaced `Tone.Offline` in `exportScoreToWav` with a deterministic pure-JS 44.1 kHz stereo PCM synthesizer (`Float32Array` buffers) driven by `buildScore(params)`, `humaniseEvent`, and `createPRNG(seed)`, rendering all layers (`melody`, `canon`, `bass`, `pad`, `drone`, `percussion`/`rhythm`), ambient `wind`/`rain`/droplets/`thunder`, stereo feedback-delay reverb, 4s fade-in / 1.5s fade-out, and `-3 dBFS` soft safety limiting (`tanh`).
+  - Properly resolved `event.frequency` / `event.midi` pitch fields, preserved `AbortSignal` cancellation, and extended `triggerBlobDownload` cleanup timeout to `30000ms` with `a.style.display = 'none'`.
+- **Verification**:
+  - Verified real browser downloads in headless Brave against `npm run preview` (`30s` -> `4.22s`, `6.06 MB`, `peakDb: -13.65`, `clipped: 0`; `60s` -> `9.77s`, `11.1 MB`, `peakDb: -13.57`, `clipped: 0`; `180s` -> `21.91s`, `31.29 MB`, `peakDb: -13.47`, `clipped: 0`; `DETERMINISM_SAME_SEED_IDENTICAL: true`).
+  - Ran `npm test` (`6` test files, `70` tests passed) and `npm run build` (`vite build` succeeded).
+  - Committed and pushed changes to `origin/main`.

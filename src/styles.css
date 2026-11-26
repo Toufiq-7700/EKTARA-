@@ -1692,6 +1692,7 @@ select option {
   .mute-btn,
   .dice-btn,
   .lab-solo-btn,
+  .alg-mini-btn,
   .transport-btn,
   .lang-btn {
     min-width: 44px;
