@@ -32,14 +32,15 @@ export function computeTreeBranches(
   startY,
   targetHeight,
   maxDepth = 999,
-  lengthDecay = 0.72
+  lengthDecay = 0.72,
+  { startAngle = -90, centerToStart = false } = {}
 ) {
   const MAX_BRANCHES = 2200;
   const raw = [];
   const stack = [];
   let x = 0;
   let y = 0;
-  let angle = -90; // Start pointing up (degrees)
+  let angle = startAngle;
   let depth = 0;
   let branchIndex = 0;
   let currentLength = 1;
@@ -124,16 +125,22 @@ export function computeTreeBranches(
     }
   }
 
-  // Normalize scale so tree fits comfortably in targetHeight regardless of depth
+  // Normalize scale so tree/curve fits comfortably in targetHeight regardless of depth
   const spanY = Math.max(0.01, maxY - minY);
-  const scale = targetHeight / spanY;
+  const spanX = Math.max(0.01, maxX - minX);
+  const scale = centerToStart
+    ? Math.min(targetHeight / spanY, (targetHeight * 1.45) / spanX)
+    : targetHeight / spanY;
+
+  const offsetX = centerToStart ? -((minX + maxX) * 0.5) * scale : 0;
+  const offsetY = centerToStart ? -(maxY * scale) : 0;
 
   return raw.map(b => ({
     ...b,
-    x1: startX + b.x1 * scale,
-    y1: startY + b.y1 * scale,
-    x2: startX + b.x2 * scale,
-    y2: startY + b.y2 * scale,
+    x1: startX + offsetX + b.x1 * scale,
+    y1: startY + offsetY + b.y1 * scale,
+    x2: startX + offsetX + b.x2 * scale,
+    y2: startY + offsetY + b.y2 * scale,
     length: b.length * scale
   }));
 }
@@ -159,12 +166,13 @@ export function drawTree(
 ) {
   if (!branches || branches.length === 0) return;
 
-  // Build a set of active branch indices from melody events
+  // Build a set of active branch indices from melody role events (Nørgård, Thue-Morse, Fibonacci)
   const activeBranches = new Set();
   if (glowEnabled && activeEvents) {
     for (const evt of activeEvents) {
-      if (evt.meta?.algorithm === 'norgard') {
-        activeBranches.add(evt.meta.index % branches.length);
+      if (evt.meta?.role === 'melody' || evt.voice === 'melody' || evt.meta?.algorithm === 'norgard') {
+        const idx = evt.meta?.index ?? evt.meta?.localIndex ?? 0;
+        activeBranches.add(idx % branches.length);
       }
     }
   }

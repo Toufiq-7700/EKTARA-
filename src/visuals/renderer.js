@@ -48,11 +48,23 @@ let reducedMotion = false;
 let externalTime = null;
 let hoveredTarget = null;
 const visibleAlgorithms = {
+  melody: true,
+  bass: true,
+  rhythm: true,
+  tree: true,
   norgard: true,
   hanoi: true,
   bjorklund: true,
   lsystem: true
 };
+
+function isRoleVisible(role) {
+  if (role === 'melody') return visibleAlgorithms.melody && visibleAlgorithms.norgard;
+  if (role === 'bass') return visibleAlgorithms.bass && visibleAlgorithms.hanoi;
+  if (role === 'rhythm') return visibleAlgorithms.rhythm && visibleAlgorithms.bjorklund;
+  if (role === 'tree') return visibleAlgorithms.tree && visibleAlgorithms.lsystem;
+  return true;
+}
 
 // Growth & crossfade animation
 let growthProgress = 0;
@@ -100,7 +112,11 @@ function buildVisualLayout(score, resetGrowth = false) {
     groundY,
     treeHeight,
     999,
-    lengthRatio
+    lengthRatio,
+    {
+      startAngle: lCfg.startAngle ?? -90,
+      centerToStart: !!lCfg.centerToStart
+    }
   );
 
   const particleCount = Math.round(leafDensity * 36);
@@ -313,20 +329,20 @@ export function hitTestGarden(clientX, clientY) {
     y = (y - groundY * 0.85) / zoomLevel + groundY * 0.85;
   }
 
-  // 1. Fireflies
-  if (visibleAlgorithms.bjorklund && fireflyState) {
+  // 1. Fireflies (rhythm role)
+  if (isRoleVisible('rhythm') && fireflyState) {
     for (let i = 0; i < fireflyState.fireflies.length; i++) {
       const ff = fireflyState.fireflies[i];
       const dx = x - ff.baseX;
       const dy = y - ff.baseY;
       if (dx * dx + dy * dy <= 196) {
-        return { algorithm: 'bjorklund', step: i };
+        return { role: 'rhythm', algorithm: 'bjorklund', step: i };
       }
     }
   }
 
-  // 2. Hanoi pillars/discs
-  if (visibleAlgorithms.hanoi && hanoiState) {
+  // 2. Hanoi pillars/discs (bass role)
+  if (isRoleVisible('bass') && hanoiState) {
     const scale = 0.8;
     const pegPositions = { A: -100, B: 0, C: 100 };
     const discHeight = 10 * scale;
@@ -339,14 +355,14 @@ export function hitTestGarden(clientX, clientY) {
         const dw = (disc / hanoiState.numDiscs) * maxDiscWidth;
         const dy = groundY + 5 - (i + 1) * discHeight;
         if (x >= px - dw - 4 && x <= px + dw + 4 && y >= dy - 4 && y <= dy + discHeight + 4) {
-          return { algorithm: 'hanoi', disc, peg };
+          return { role: 'bass', algorithm: 'hanoi', disc, peg };
         }
       }
     }
   }
 
-  // 3. Tree branches (sampled closest segment within 10px)
-  if (visibleAlgorithms.lsystem && treeBranches.length > 0) {
+  // 3. Tree branches (melody / tree role)
+  if (isRoleVisible('tree') && treeBranches.length > 0) {
     let best = null;
     let bestDist = 100;
     const step = Math.max(1, Math.floor(treeBranches.length / 400));
@@ -361,8 +377,10 @@ export function hitTestGarden(clientX, clientY) {
       }
     }
     if (best) {
+      const activeMel = currentScore.roles?.melody || 'norgard';
       return {
-        algorithm: visibleAlgorithms.norgard ? 'norgard' : 'lsystem',
+        role: isRoleVisible('melody') ? 'melody' : 'tree',
+        algorithm: isRoleVisible('melody') ? activeMel : (currentScore.roles?.tree || 'lsystem'),
         index: best.index
       };
     }
@@ -430,32 +448,39 @@ function animate(now) {
   ctx.save();
   ctx.globalAlpha = sceneFade;
 
-  // Layer 1: Hanoi pillars and discs
-  if (visibleAlgorithms.hanoi && hanoiState) {
+  // Layer 1: Bass pillars and discs (Hanoi or pulse-pillars for Gray code / Cantor)
+  if (isRoleVisible('bass') && hanoiState) {
     if (externalTime === null) {
       updateHanoiAnimation(hanoiState, motionDt);
     }
-    const hanoiDisc = hoveredTarget?.algorithm === 'hanoi' ? hoveredTarget.disc : null;
+    const isBassHl = hoveredTarget && (hoveredTarget.role === 'bass' || hoveredTarget.algorithm === 'hanoi');
+    const hanoiDisc = isBassHl ? (hoveredTarget.disc || 1) : null;
     drawHanoi(ctx, hanoiState, currentTheme, treeX, groundY + 5, 0.8, hanoiDisc);
   }
 
   // Mid rain layer (around tree)
   drawRainLayer(ctx, rainState, 1, currentTheme);
 
-  // Layer 2: The L-system tree (hero)
-  if (visibleAlgorithms.lsystem && treeBranches.length > 0) {
+  // Layer 2: The L-system / Fractal tree (hero)
+  if (isRoleVisible('tree') && treeBranches.length > 0) {
     const visibleBranches = treeBranches.slice(
       0,
       Math.max(1, Math.floor(treeBranches.length * growthProgress))
     );
     const windPhase = elapsedTime * 0.5 + windValue * 0.6;
-    const branchHl = (hoveredTarget?.algorithm === 'norgard' || hoveredTarget?.algorithm === 'lsystem')
-      ? hoveredTarget.index
-      : null;
-    const hlColor = hoveredTarget?.algorithm === 'lsystem' ? '#f078c8' : '#f0c878';
+    const isMelOrTreeHl = hoveredTarget && (
+      hoveredTarget.role === 'melody' ||
+      hoveredTarget.role === 'tree' ||
+      hoveredTarget.algorithm === 'norgard' ||
+      hoveredTarget.algorithm === 'lsystem'
+    );
+    const branchHl = isMelOrTreeHl ? (hoveredTarget.index ?? 0) : null;
+    const hlColor = (hoveredTarget?.role === 'tree' || hoveredTarget?.algorithm === 'lsystem')
+      ? '#f078c8'
+      : '#f0c878';
     const lCfg = currentScore?.lsystemConfig || currentScore?.params?.lsystem || {};
     drawTree(ctx, visibleBranches, currentTheme, activeEvents, elapsedTime, windPhase, reducedMotion, {
-      glowEnabled: visibleAlgorithms.norgard,
+      glowEnabled: isRoleVisible('melody'),
       highlightedBranchIdx: branchHl,
       highlightColor: hlColor,
       lineThickness: lCfg.lineThickness ?? 6,
@@ -464,12 +489,13 @@ function animate(now) {
     updateAndDrawParticles(ctx, particles, currentTheme, elapsedTime, groundY);
   }
 
-  // Layer 3: Firefly ring
-  if (visibleAlgorithms.bjorklund && fireflyState) {
+  // Layer 3: Firefly ring (rhythm role)
+  if (isRoleVisible('rhythm') && fireflyState) {
     if (externalTime === null) {
       updateFireflies(fireflyState, motionDt, elapsedTime);
     }
-    const fireflyHl = hoveredTarget?.algorithm === 'bjorklund' ? hoveredTarget.step : null;
+    const isRhythmHl = hoveredTarget && (hoveredTarget.role === 'rhythm' || hoveredTarget.algorithm === 'bjorklund');
+    const fireflyHl = isRhythmHl ? (hoveredTarget.step ?? 0) : null;
     drawFireflies(ctx, fireflyState, currentTheme, fireflyHl);
   }
 
@@ -534,11 +560,23 @@ function updateActiveEvents(audioTime) {
           to: event.meta.to
         });
       }
-    } else if (event.voice === 'percussion' && event.meta?.algorithm === 'bjorklund') {
-      const percKey = `${event.time}-${event.meta.step}`;
-      if (!processedPercSteps.has(percKey) && fireflyState) {
+    } else if (event.voice === 'bass' && hanoiState) {
+      // Animate a subtle disc glide across pegs for Gray Code / Cantor Bass
+      const stepKey = `alt-${event.time}-${event.meta?.index ?? 0}`;
+      if (!processedHanoiSteps.has(stepKey)) {
+        processedHanoiSteps.add(stepKey);
+        const pegs = ['A', 'B', 'C'];
+        const curPeg = pegs.find(p => hanoiState.pegs[p].length > 0) || 'A';
+        const nextPeg = pegs[(pegs.indexOf(curPeg) + 1) % 3];
+        const disc = hanoiState.pegs[curPeg][hanoiState.pegs[curPeg].length - 1] || 1;
+        applyHanoiMove(hanoiState, { disc, from: curPeg, to: nextPeg });
+      }
+    } else if (event.voice === 'percussion' && fireflyState) {
+      const stepNum = event.meta?.step ?? 0;
+      const percKey = `${event.time}-${stepNum}`;
+      if (!processedPercSteps.has(percKey)) {
         processedPercSteps.add(percKey);
-        triggerFirefly(fireflyState, event.meta.step);
+        triggerFirefly(fireflyState, stepNum);
       }
     }
 

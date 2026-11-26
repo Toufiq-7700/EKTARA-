@@ -1,22 +1,19 @@
 /**
  * Recursion X-Ray Mode
- * 
- * An overlay that shows judges the algorithms are real:
- * labels like "nørgård(11) = 2, depth 3", "hanoi: disc 2 A→C",
- * and a mini call-stack diagram.
+ *
+ * Overlay showing judges the algorithms are real across all roles
+ * (melody, bass, rhythm, tree), colored by role.
  */
 
-/**
- * Draw the X-ray overlay showing active recursion calls.
- */
-export function drawXRay(ctx, activeEvents, theme, width, height) {
+import { resolveEventRole, ROLES_META } from '../algorithms/meta.js';
+
+export function drawXRay(ctx, activeEvents, theme, width, _height) {
   if (!activeEvents || activeEvents.length === 0) return;
 
   const padding = 16;
   const lineHeight = 18;
   const maxLabels = 8;
 
-  // Gather unique active labels
   const labels = [];
   const seen = new Set();
   for (const evt of activeEvents) {
@@ -24,6 +21,7 @@ export function drawXRay(ctx, activeEvents, theme, width, height) {
       seen.add(evt.meta.label);
       labels.push({
         text: evt.meta.label,
+        role: resolveEventRole(evt),
         algorithm: evt.meta.algorithm,
         voice: evt.voice
       });
@@ -33,61 +31,48 @@ export function drawXRay(ctx, activeEvents, theme, width, height) {
 
   if (labels.length === 0) return;
 
-  // Draw panel background (top-left so it never overlaps the right-side control panel)
-  const panelWidth = Math.min(290, Math.max(220, width - 40));
-  const panelHeight = padding * 2 + labels.length * lineHeight + 36;
+  const panelWidth = Math.min(315, Math.max(220, width - 40));
+  const panelHeight = padding * 2 + labels.length * lineHeight + 38;
   const panelX = 20;
-  const panelY = 20;
+  const panelY = 58;
 
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
   ctx.beginPath();
   ctx.roundRect(panelX, panelY, panelWidth, panelHeight, 8);
   ctx.fill();
 
-  // Header
   ctx.fillStyle = theme.accent;
   ctx.font = 'bold 11px monospace';
   ctx.fillText('⟨ RECURSION X-RAY ⟩', panelX + padding, panelY + padding + 10);
 
-  // Algorithm labels
   ctx.font = '11px monospace';
-  const colors = {
-    norgard: '#f0c878',
-    hanoi: '#78c8f0',
-    bjorklund: '#a0f078',
-    lsystem: '#f078c8'
-  };
-
   for (let i = 0; i < labels.length; i++) {
     const label = labels[i];
     const y = panelY + padding + 30 + i * lineHeight;
+    const roleColor = ROLES_META[label.role]?.color || theme.text;
 
-    // Color dot for algorithm type
-    ctx.fillStyle = colors[label.algorithm] || theme.text;
+    ctx.fillStyle = roleColor;
     ctx.beginPath();
     ctx.arc(panelX + padding + 4, y - 3, 3, 0, Math.PI * 2);
     ctx.fill();
 
-    // Label text
-    ctx.fillStyle = colors[label.algorithm] || theme.text;
+    ctx.fillStyle = roleColor;
     ctx.fillText(label.text, panelX + padding + 14, y);
   }
 
-  // Mini call depth indicator
   const depthY = panelY + panelHeight - 15;
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
   ctx.font = '9px monospace';
-  ctx.fillText('call stack depth:', panelX + padding, depthY);
+  ctx.fillText('active layers:', panelX + padding, depthY);
 
-  // Draw depth bars
-  const algTypes = [...new Set(labels.map(l => l.algorithm))];
-  let barX = panelX + padding + 100;
-  for (const alg of algTypes) {
-    const depth = labels.filter(l => l.algorithm === alg).length;
-    ctx.fillStyle = colors[alg] || theme.text;
-    for (let d = 0; d < depth; d++) {
+  const roleTypes = [...new Set(labels.map(l => l.role))];
+  let barX = panelX + padding + 92;
+  for (const role of roleTypes) {
+    const count = labels.filter(l => l.role === role).length;
+    ctx.fillStyle = ROLES_META[role]?.color || theme.text;
+    for (let d = 0; d < count; d++) {
       ctx.fillRect(barX + d * 6, depthY - 8, 4, 8);
     }
-    barX += depth * 6 + 10;
+    barX += count * 6 + 10;
   }
 }

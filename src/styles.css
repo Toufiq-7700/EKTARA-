@@ -237,6 +237,32 @@ html, body {
   color: #c2bad2;
 }
 
+.lab-alg-picker,
+.drawer-role-picker {
+  display: block;
+  margin: 6px 0;
+}
+
+.lab-alg-select,
+.drawer-alg-select {
+  width: 100%;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 5px 8px;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.lab-card-preview {
+  margin-top: 4px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  color: var(--alg-color);
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .lab-card-params-wrap {
   margin-top: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);

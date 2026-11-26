@@ -10,12 +10,12 @@
 
 Every parameter feeds into pure, deterministic recursive functions in `src/algorithms/` that emit a single timed event **score** (`buildScore`, safety-capped at `4,000` events). Live playback, 60fps Canvas 2D visuals, Algorithm Lab simulations, and offline WAV export all consume that exact same score.
 
-| Algorithm | Recursive Definition | User-Defined Parameters | Musical & Visual Mapping |
+| Algorithm Role | Pluggable Options (`src/algorithms/registry.js`) | Recursive Definition | Musical & Visual Mapping |
 |---|---|---|---|
-| **Nørgård Infinity Series** (`src/algorithms/norgard.js`) | `n(0) = 0`, `n(2k) = -n(k)`, `n(2k+1) = n(k) + d` | Length (`8–256`), start offset (`0–512`), interval step `d` (`1–3`), canon layers (`0–3`), speed ratio (`2×`/`3×`), low/high octave range | **Melody & Tree Angles:** Quantised to `pentatonic`/`lydian`/`dorian`; shapes tree branch angles and glows active branches. |
-| **Tower of Hanoi** (`src/algorithms/hanoi.js`) | `hanoi(n, src, dst, aux)`: move `n-1` to `aux`, move disc `n`, move `n-1` to `dst` (`2^n - 1` moves) | Discs (`2–8`), start & target pegs (`A`/`B`/`C`), custom peg-to-interval mapping, move limit per loop (`3–255`) | **Bass & Pillars:** Disc size controls note length/register; destination peg chooses harmonic interval while discs arc between luminous pillars. |
-| **Euclidean Rhythm / Bjorklund** (`src/algorithms/bjorklund.js`) | Recursively distributes `k` hits evenly across `n` steps (Euclid's GCD) | Polyrhythm rings (`1–3`), per-ring pulses `k` (`1–16`), steps `n` (`2–32`, `k <= n`), rotation (`0..n-1`), accent every `N`th hit | **Soft Percussion & Fireflies:** Brushed noise, wooden taps, and soft chimes synced to an orbiting ring of fireflies and polygon. |
-| **L-System** (`src/algorithms/lsystem.js`) | Recursive string rewriting (`axiom` + validated `rules` over `generations`, safety-capped) | Axiom, editable/addable/deletable production rules (`F, +, -, [, ], X, Y`), generations (`1–8`), turn angle, length ratio, line thickness, leaf density, plus presets | **Hero Tree & Texture Density:** Turtle-graphics tree with wind sway, tip leaves, rain-hit branch dips, and falling petals. |
+| **Melody** (`◆`) | **Nørgård** (default), **Thue-Morse**, **Fibonacci Word** | `n(2k)=-n(k), n(2k+1)=n(k)+d`; `t(2n)=t(n), t(2n+1)=1-t(n)`; `S_n = S_{n-1}+S_{n-2}` | Quantised to `pentatonic`/`lydian`/`dorian` with octave & leap limits; shapes tree angles & branch glow. |
+| **Bass** (`▬`) | **Tower of Hanoi** (default), **Recursive Gray Code**, **Cantor Set Bass** | `hanoi(n, src, dst, aux)`; reflect-and-prefix `n`-bit Gray codes; middle-third removal | Destination pegs / bit-flips / active thirds select root/3rd/5th/octave bass & disc-arc animations. |
+| **Rhythm** (`●`) | **Euclidean (Bjorklund)** (default), **Cantor Set Pattern**, **Thue-Morse Pattern** | Euclid GCD hit distribution (`1–3` rings); middle-third rests; parity bit alternation | Soft brushed noise, wooden taps & chimes synced to the orbiting firefly ring & polygon. |
+| **Visual Tree** (`▲`) | **L-System** (default), **Koch Curve**, **Sierpinski Triangle** | Editable axiom/rules (`Fern`, `Binary Tree`, `Wispy Bush`, `Canopy`, `Custom`), `F→F+F--F+F`, `XF`/`YF` arrowhead | Turtle-graphics tree or fractal curve with wind sway, tip leaves, rain-hit branch dips & petals. |
 
 Use **Algorithm Lab** (or press `X` for **X-Ray Mode**) to view binary derivation trees, Hanoi call stacks, Bjorklund step-by-step merges, turtle cursor rewriting, step-by-step audio playback (`⏮`/`⏭ Step`), and linked Garden ↔ Lab hover highlighting.
 
@@ -60,14 +60,19 @@ EKTARA-/
 ├── src/
 │   ├── algorithms/
 │   │   ├── bjorklund.js       # Recursive Euclidean rhythm, merge steps, validation
+│   │   ├── cantor.js          # Recursive middle-third Cantor set (bass & rhythm)
+│   │   ├── fibonacciWord.js   # Recursive Fibonacci word substitution (melody)
+│   │   ├── grayCode.js        # Recursive reflect-and-prefix Gray code (bass)
 │   │   ├── hanoi.js           # Recursive Tower of Hanoi move generator
-│   │   ├── lsystem.js         # Recursive rewriting, symbol validation & safety cap
-│   │   ├── meta.js            # Canonical algorithm colors, shapes & step captions
+│   │   ├── lsystem.js         # Rewriting, symbol validation, Koch & Sierpinski presets
+│   │   ├── meta.js            # Canonical role colors, shapes & step captions
 │   │   ├── norgard.js         # Memoized generalised Nørgård series (d = 1..3)
 │   │   ├── params.js          # Parameter schema, normalizer, presets & randomiser
 │   │   ├── prng.js            # Mulberry32 deterministic seeded PRNG
+│   │   ├── registry.js        # Uniform plugin registry for all 4 roles
 │   │   ├── scales.js          # Scale degree → MIDI, octave clamping, frequencies
-│   │   └── score.js           # Unified score builder with 4,000-event safety cap
+│   │   ├── score.js           # Registry-driven score builder with 4,000-event cap
+│   │   └── thueMorse.js       # Recursive Thue-Morse parity sequence (melody & rhythm)
 │   ├── audio/
 │   │   ├── engine.js          # Live Tone.js playback, smooth crossfade, step preview
 │   │   ├── export.js          # Offline Tone.Offline render + 16-bit stereo WAV encoder
@@ -75,12 +80,13 @@ EKTARA-/
 │   │   ├── instruments.js     # Glass Bell, Music Box, Kalimba, Singing Bowl, Bass, Pad, Perc
 │   │   └── rain.js            # Layered procedural stereo rain + droplets + thunder
 │   ├── lab/
-│   │   ├── labController.js   # Selector cards, On/Off, Solo, embedded editors & step mode
+│   │   ├── labController.js   # Role cards, algorithm switcher, On/Off, Solo & step mode
 │   │   ├── simEuclidean.js    # Bjorklund step-by-step merge & sweeping rhythm wheel
 │   │   ├── simHanoi.js        # 3-peg animation & recursive call tree
 │   │   ├── simLSystem.js      # Generation scrubber, colored symbols & turtle cursor
 │   │   ├── simNorgard.js      # Binary derivation tree, tiles & self-similarity contour
-│   │   └── timelineStrip.js   # "What You Hear" 4-lane scrolling piano roll
+│   │   ├── simPlugins.js      # Dedicated Lab sims for Thue-Morse, Fibonacci, Gray & Cantor
+│   │   └── timelineStrip.js   # "What You Hear" 4-lane role piano roll
 │   ├── ui/
 │   │   ├── controls.js        # Collapsible control drawer, presets, JSON import/export
 │   │   └── paramEditors.js    # Shared per-algorithm parameter editors & rule validator
@@ -99,6 +105,7 @@ EKTARA-/
 │   ├── algorithms.test.js     # Core math, validation, safety cap & depth 1–8 tests
 │   ├── export.test.js         # WAV encoder, filenames & JSON export tests
 │   ├── rain.test.js           # Rain particle pool & audio parameter tests
+│   ├── registry.test.js       # New algorithm sequences & all 81 role combos tests
 │   └── sound.test.js          # Timbre & seeded humanisation tests
 ├── index.html
 ├── package.json

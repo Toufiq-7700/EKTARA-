@@ -456,3 +456,46 @@ Implemented full user-defined per-algorithm recursion parameters across the algo
 - **Tests, Build & Docs (`tests/algorithms.test.js`, `README.md`)**: Added Vitest tests for generalised Nørgård `d=1..3` & offset, Hanoi `2..8` disc move counts, Euclidean validation, L-system symbol validation & safety cap, and the 4,000-event cap. Verified `npm test` and `npm run build` pass.
 
 ---
+## Prompt 14: Pluggable Algorithm Registry Per Role
+
+### Prompt
+
+Let the user choose which recursive algorithm drives each musical role. Build an algorithm registry in src/algorithms/registry.js, where every algorithm is a plugin with the same interface:
+  { id, role, name, description, defaultParams, paramSchema,
+    generate(params, rng) -> events, trace(params) -> step-by-step data for the Lab }
+buildScore(params) must read the chosen algorithm for each role from the registry instead of hard-coding the four defaults.
+
+ALGORITHM OPTIONS PER ROLE:
+- MELODY: Norgard infinity series (default), Thue-Morse (t(2n)=t(n), t(2n+1)=1-t(n)), Fibonacci word (S_n = S_(n-1) + S_(n-2))
+- BASS: Tower of Hanoi (default), recursive Gray code (reflect and prefix), Cantor-set rhythm (recursively remove the middle third)
+- RHYTHM: Euclidean/Bjorklund (default), Cantor-set pattern, Thue-Morse pattern
+- VISUAL TREE: L-system (default), plus Koch curve and Sierpinski triangle as L-system-style presets drawn in the Garden
+
+UI:
+- Each Lab card gets an "Algorithm" dropdown for its role, with a short plain-English description and a tiny preview. Switching the dropdown swaps the algorithm, its parameter controls (from paramSchema), its Lab simulation, and its sound, with a smooth crossfade.
+- Each new algorithm needs its own Lab simulation in the same style as the existing ones: the recursion drawn step by step, the resulting sequence, the current step highlighted, and a plain-English caption of how each value becomes a note. The "What You Hear" strip, step mode, linked highlighting, and the X-Ray overlay must work for every choice.
+- Colours and shape badges stay tied to the ROLE (melody, bass, rhythm, tree) so the interface remains consistent.
+- The chosen algorithm ids go into presets, the URL hash, the JSON export, and the WAV export.
+
+MUSIC RULES: every algorithm's output is quantised to the chosen scale and mapped into the existing register and density limits, so any combination remains relaxing (limit leaps, keep rests, cap note density).
+
+Add Vitest tests with known first values for each new algorithm (Thue-Morse starts 0,1,1,0,1,0,0,1; Fibonacci word starts 0100101001001; Gray code for 3 bits; Cantor pattern at depth 2), plus a test that every role/algorithm combination produces a valid score without throwing. Make sure npm test and npm run build pass. Update the prompt log and README.
+
+### Response
+
+Built a uniform plugin registry in `src/algorithms/registry.js` and updated `buildScore`, the Algorithm Lab, Control Drawer, Garden visuals, X-Ray overlay, WAV/JSON exports, and tests:
+- **New Pure Algorithms**:
+  - `src/algorithms/thueMorse.js`: Memoized recursive `thueMorse(n)` (`0, 1, 1, 0, 1, 0, 0, 1`), `thueMorseSequence`, and leap-limited `thueMorseDegrees`.
+  - `src/algorithms/fibonacciWord.js`: Recursive `fibonacciWord(n)` (`S_5 = 0100101001001`) and `fibonacciWordSteps`.
+  - `src/algorithms/grayCode.js`: Recursive reflect-and-prefix `grayCode(bits)` (`3-bit: 000..100`) and `grayCodeTrace` with single-bit flip analysis.
+  - `src/algorithms/cantor.js`: Recursive middle-third `cantorPattern(depth)` (`depth 2: 101000101`) and `cantorSteps`.
+  - `src/algorithms/lsystem.js`: Added `Koch Curve` (`F -> F+F--F+F`, 60°) and `Sierpinski Triangle` (`XF`, `X -> YF+XF+Y`, `Y -> XF-YF-X`, 60°).
+- **Plugin Registry & Score Integration (`src/algorithms/registry.js`, `src/algorithms/score.js`, `src/algorithms/params.js`)**:
+  - Registered 12 plugins across `melody`, `bass`, `rhythm`, and `tree` with `{ id, role, name, description, preview, defaultParams, paramSchema, generate, trace }`.
+  - `buildScore` dynamically reads `params.roles` from the registry, enforces scale quantisation, octave clamping, melodic leap limits, breathing rests, and the 4,000-event cap. Chosen role IDs persist in presets, URL hash, JSON export/load, and `Tone.Offline` WAV export.
+- **Role-Based UI, Simulations & Linked Views (`src/algorithms/meta.js`, `src/lab/labController.js`, `src/lab/simPlugins.js`, `src/lab/timelineStrip.js`, `src/ui/paramEditors.js`, `src/ui/controls.js`, `src/visuals/renderer.js`, `src/visuals/tree.js`, `src/visuals/xray.js`)**:
+  - Added per-role Algorithm dropdowns, descriptions, and previews in both Lab cards and Control Drawer, keeping colors & shape badges (`◆`, `▬`, `●`, `▲`) tied to role.
+  - Added dedicated Lab simulations for Thue-Morse, Fibonacci Word, Gray Code, and Cantor Set alongside Nørgård, Hanoi, Euclidean, and L-System/Koch/Sierpinski, with step-mode captions, What-You-Hear lane routing, linked Garden hover, and X-Ray role support.
+- **Tests & Docs (`tests/registry.test.js`, `README.md`)**: Added tests for Thue-Morse, Fibonacci Word, 3-bit Gray code, depth-2 Cantor pattern, and all 81 `(3 × 3 × 3 × 3)` role/algorithm combinations. Verified `npm test` and `npm run build` pass.
+
+---

@@ -7,6 +7,7 @@
 
 import { createPRNG } from './prng.js';
 import { LSYSTEM_PRESETS, validateLSystem } from './lsystem.js';
+import { DEFAULT_ROLES } from './registry.js';
 
 export const MAX_SCORE_EVENTS = 4000;
 
@@ -82,6 +83,8 @@ export const DEFAULT_PARAMS = {
   rainIntensity: 0.35,
   thunderEnabled: true,
   timbres: { ...DEFAULT_TIMBRES },
+  roles: { ...DEFAULT_ROLES },
+  pluginParams: {},
   norgard: { ...DEFAULT_NORGARD_PARAMS },
   hanoi: {
     ...DEFAULT_HANOI_PARAMS,
@@ -189,6 +192,8 @@ export function normalizeParams(input = {}) {
     rainIntensity: clampNum(input.rainIntensity ?? 0.35, 0, 1),
     thunderEnabled: input.thunderEnabled ?? true,
     timbres: { ...DEFAULT_TIMBRES, ...(input.timbres || {}) },
+    roles: { ...DEFAULT_ROLES, ...(input.roles || {}) },
+    pluginParams: structuredClone(input.pluginParams || {}),
     norgard,
     hanoi,
     euclid,

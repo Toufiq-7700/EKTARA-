@@ -50,6 +50,10 @@ const layerMuted = {
   ambient: false
 };
 const algorithmDisabled = {
+  melody: false,
+  bass: false,
+  rhythm: false,
+  tree: false,
   norgard: false,
   hanoi: false,
   bjorklund: false,
@@ -58,10 +62,10 @@ const algorithmDisabled = {
 
 function isVoiceEffectivelyMuted(voice) {
   if (layerMuted[voice]) return true;
-  if ((voice === 'melody' || voice === 'canon') && algorithmDisabled.norgard) return true;
-  if (voice === 'canon' && algorithmDisabled.lsystem) return true;
-  if (voice === 'bass' && algorithmDisabled.hanoi) return true;
-  if (voice === 'percussion' && algorithmDisabled.bjorklund) return true;
+  if ((voice === 'melody' || voice === 'canon') && (algorithmDisabled.melody || algorithmDisabled.norgard)) return true;
+  if (voice === 'canon' && (algorithmDisabled.tree || algorithmDisabled.lsystem)) return true;
+  if (voice === 'bass' && (algorithmDisabled.bass || algorithmDisabled.hanoi)) return true;
+  if (voice === 'percussion' && (algorithmDisabled.rhythm || algorithmDisabled.bjorklund)) return true;
   return false;
 }
 

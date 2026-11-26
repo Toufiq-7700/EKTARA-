@@ -135,7 +135,11 @@ export function createLSystemSim() {
       treeGroundY,
       treeH,
       999,
-      lengthRatio
+      lengthRatio,
+      {
+        startAngle: lCfg.startAngle ?? -90,
+        centerToStart: !!lCfg.centerToStart
+      }
     );
 
     for (const b of branches) {

@@ -1,12 +1,12 @@
 /**
  * "What You Hear" Horizontal Timeline Strip
  *
- * 4-lane scrolling piano roll at the bottom of the Algorithm Lab showing
- * how Nørgård, Hanoi, Euclidean, and L-System events interleave over time.
- * Supports hover (linked highlighting) and click (seek/step to event).
+ * 4-lane scrolling piano roll at the bottom of the Algorithm Lab keyed by
+ * musical ROLE (`melody`, `bass`, `rhythm`, `tree`) so any plugged-in algorithm
+ * renders seamlessly in its role's consistent color and shape.
  */
 
-import { ALGORITHMS, ALGORITHM_ORDER } from '../algorithms/meta.js';
+import { ROLES_META, ROLE_ORDER, resolveEventRole } from '../algorithms/meta.js';
 
 const WINDOW_SECONDS = 12;
 
@@ -25,12 +25,12 @@ export function createTimelineStrip() {
     const endT = startT + WINDOW_SECONDS;
     const playheadX = labelW + ((currentTime - startT) / WINDOW_SECONDS) * trackW;
 
-    // Draw 4 lane backgrounds + labels
-    for (let laneIdx = 0; laneIdx < ALGORITHM_ORDER.length; laneIdx++) {
-      const id = ALGORITHM_ORDER[laneIdx];
-      const meta = ALGORITHMS[id];
+    // Draw 4 role lane backgrounds + labels
+    for (let laneIdx = 0; laneIdx < ROLE_ORDER.length; laneIdx++) {
+      const role = ROLE_ORDER[laneIdx];
+      const meta = ROLES_META[role];
       const y = 6 + laneIdx * laneH;
-      const enabled = enabledMap[id] !== false;
+      const enabled = enabledMap[role] !== false;
 
       ctx.fillStyle = laneIdx % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.015)';
       ctx.fillRect(labelW, y, trackW, laneH - 2);
@@ -46,23 +46,21 @@ export function createTimelineStrip() {
     for (const ev of score.events) {
       if (ev.time + ev.duration < startT || ev.time > endT) continue;
 
-      let algId = ev.meta?.algorithm;
-      if (!algId) continue;
-
-      const laneIdx = ALGORITHM_ORDER.indexOf(algId);
+      const role = resolveEventRole(ev);
+      const laneIdx = ROLE_ORDER.indexOf(role);
       if (laneIdx === -1) continue;
 
-      const meta = ALGORITHMS[algId];
-      const enabled = enabledMap[algId] !== false;
+      const meta = ROLES_META[role];
+      const enabled = enabledMap[role] !== false;
       const y = 6 + laneIdx * laneH + 3;
       const bh = Math.max(8, laneH - 8);
       const bx = labelW + ((Math.max(startT, ev.time) - startT) / WINDOW_SECONDS) * trackW;
       const bw = Math.max(5, (Math.min(endT, ev.time + ev.duration) - Math.max(startT, ev.time)) / WINDOW_SECONDS * trackW);
 
       const isHl = hoveredTarget && (
-        (algId === 'norgard' && hoveredTarget.algorithm === 'norgard' && hoveredTarget.index === ev.meta.index) ||
-        (algId === 'hanoi' && hoveredTarget.algorithm === 'hanoi' && hoveredTarget.disc === ev.meta.disc) ||
-        (algId === 'bjorklund' && hoveredTarget.algorithm === 'bjorklund' && hoveredTarget.step === ev.meta.step)
+        (role === 'melody' && (hoveredTarget.role === 'melody' || hoveredTarget.algorithm === 'norgard') && hoveredTarget.index === ev.meta?.index) ||
+        (role === 'bass' && (hoveredTarget.role === 'bass' || hoveredTarget.algorithm === 'hanoi') && hoveredTarget.disc === ev.meta?.disc) ||
+        (role === 'rhythm' && (hoveredTarget.role === 'rhythm' || hoveredTarget.algorithm === 'bjorklund') && hoveredTarget.step === ev.meta?.step)
       );
 
       ctx.globalAlpha = enabled ? (ev.voice === 'canon' ? 0.45 : 0.85) : 0.18;
@@ -72,14 +70,14 @@ export function createTimelineStrip() {
       ctx.fill();
       ctx.globalAlpha = 1;
 
-      blockBoxes.push({ x: bx, y, w: bw, h: bh, event: ev, algId });
+      blockBoxes.push({ x: bx, y, w: bw, h: bh, event: ev, role });
 
-      // Mirror melody phrases onto L-System lane to illustrate texture density
-      if (algId === 'norgard' && ev.voice === 'melody' && ev.meta.index % 2 === 0) {
+      // Mirror melody phrases onto Visual Tree lane to illustrate texture density
+      if (role === 'melody' && ev.voice === 'melody' && ((ev.meta?.localIndex ?? ev.meta?.index ?? 0) % 2 === 0)) {
         const ly = 6 + 3 * laneH + 4;
-        const lEnabled = enabledMap.lsystem !== false;
+        const lEnabled = enabledMap.tree !== false;
         ctx.globalAlpha = lEnabled ? 0.5 : 0.15;
-        ctx.fillStyle = ALGORITHMS.lsystem.color;
+        ctx.fillStyle = ROLES_META.tree.color;
         ctx.beginPath();
         ctx.roundRect(bx, ly, Math.max(6, bw * 1.4), Math.max(6, laneH - 10), 3);
         ctx.fill();
@@ -101,9 +99,9 @@ export function createTimelineStrip() {
       const b = blockBoxes[i];
       if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
         const m = b.event.meta || {};
-        if (b.algId === 'norgard') return { algorithm: 'norgard', index: m.index, event: b.event };
-        if (b.algId === 'hanoi') return { algorithm: 'hanoi', disc: m.disc, event: b.event };
-        if (b.algId === 'bjorklund') return { algorithm: 'bjorklund', step: m.step, event: b.event };
+        if (b.role === 'melody') return { role: 'melody', algorithm: m.algorithm, index: m.index, event: b.event };
+        if (b.role === 'bass') return { role: 'bass', algorithm: m.algorithm, disc: m.disc, event: b.event };
+        if (b.role === 'rhythm') return { role: 'rhythm', algorithm: m.algorithm, step: m.step, event: b.event };
       }
     }
     return null;

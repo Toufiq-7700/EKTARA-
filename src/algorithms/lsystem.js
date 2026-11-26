@@ -84,6 +84,27 @@ export const LSYSTEM_PRESETS = {
     angle: 30,
     maxGen: 5,
     description: 'A tall tree with a spreading canopy'
+  },
+  'Koch Curve': {
+    axiom: 'F',
+    rules: {
+      'F': 'F+F--F+F'
+    },
+    angle: 60,
+    maxGen: 4,
+    startAngle: 0,
+    description: 'Recursive Koch snowflake curve subdividing each edge into four'
+  },
+  'Sierpinski Triangle': {
+    axiom: 'XF',
+    rules: {
+      'X': 'YF+XF+Y',
+      'Y': 'XF-YF-X'
+    },
+    angle: 60,
+    maxGen: 5,
+    startAngle: -30,
+    description: 'Sierpinski arrowhead curve recursively tessellating a triangle'
   }
 };
 

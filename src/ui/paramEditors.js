@@ -9,6 +9,8 @@
 import { LSYSTEM_PRESETS, validateLSystem, lsystemSafe } from '../algorithms/lsystem.js';
 import { validateEuclideanParams } from '../algorithms/bjorklund.js';
 import { hanoiMoveCount } from '../algorithms/hanoi.js';
+import { createPRNG } from '../algorithms/prng.js';
+import { getAlgorithmPlugin } from '../algorithms/registry.js';
 import {
   PEG_INTERVAL_CHOICES,
   normalizeParams,
@@ -18,11 +20,55 @@ import {
 
 let randomSalt = 1;
 
+function resolvePluginAndKey(roleOrId, params) {
+  if (['melody', 'bass', 'rhythm', 'tree'].includes(roleOrId)) {
+    const plugin = getAlgorithmPlugin(roleOrId, params.roles?.[roleOrId]);
+    return { role: roleOrId, plugin, effectiveId: plugin.id };
+  }
+  const roleMap = { norgard: 'melody', hanoi: 'bass', bjorklund: 'rhythm', lsystem: 'tree' };
+  const role = roleMap[roleOrId] || 'melody';
+  const plugin = getAlgorithmPlugin(role, roleOrId);
+  return { role, plugin, effectiveId: plugin.id };
+}
+
 /**
- * Render HTML controls for one algorithm (`norgard`, `hanoi`, `bjorklund`, `lsystem`).
+ * Render HTML controls for a role or plugin (`norgard`, `thue-morse`, `fibonacci-word`, etc.).
  */
-export function renderAlgorithmFields(algId, rawParams, scoreStats) {
+export function renderAlgorithmFields(roleOrId, rawParams, scoreStats) {
   const p = normalizeParams(rawParams);
+  const { role, plugin, effectiveId: algId } = resolvePluginAndKey(roleOrId, p);
+
+  // Generic schema-driven editor for newly plugged algorithms
+  if (!['norgard', 'hanoi', 'bjorklund', 'lsystem'].includes(algId) && plugin?.paramSchema) {
+    const curVals = { ...plugin.defaultParams, ...(p.pluginParams?.[algId] || {}) };
+    const statLine = scoreStats?.[role] || `${plugin.name}: ready`;
+    return `
+      <div class="alg-stats-line">${statLine}</div>
+      <div class="alg-field-grid">
+        ${plugin.paramSchema.map(f => {
+          const val = curVals[f.key] ?? f.min;
+          if (f.type === 'select') {
+            return `
+              <label class="alg-field" title="${escapeAttr(f.tooltip || f.label)}">
+                <span>${f.label}</span>
+                <select data-path="pluginParams.${algId}.${f.key}" aria-label="${escapeAttr(f.label)}">
+                  ${(f.options || []).map(o => `<option value="${o.value}"${val === o.value ? ' selected' : ''}>${o.label}</option>`).join('')}
+                </select>
+              </label>
+            `;
+          }
+          return `
+            <label class="alg-field" title="${escapeAttr(f.tooltip || f.label)}">
+              <span>${f.label}: <strong class="val-out" data-val="pluginParams.${algId}.${f.key}">${val}</strong></span>
+              <input type="range" min="${f.min}" max="${f.max}" step="${f.step || 1}" value="${val}"
+                     data-path="pluginParams.${algId}.${f.key}" aria-label="${escapeAttr(f.label)}" />
+            </label>
+          `;
+        }).join('')}
+      </div>
+      ${renderFooterButtons(algId)}
+    `;
+  }
 
   if (algId === 'norgard') {
     const n = p.norgard;
@@ -263,14 +309,16 @@ function renderFooterButtons(algId) {
  * @param {string} algId
  * @param {{ getParams, onUpdateParams, onImmediatePreview }} handlers
  */
-export function bindAlgorithmEditor(rootEl, algId, handlers) {
+export function bindAlgorithmEditor(rootEl, roleOrId, handlers) {
   const { getParams, onUpdateParams, onImmediatePreview } = handlers;
+  const { role, plugin, effectiveId: algId } = resolvePluginAndKey(roleOrId, normalizeParams(getParams()));
 
   const setNested = (obj, path, value) => {
     const keys = path.split('.');
     const clone = structuredCloneSafe(obj);
     let cur = clone;
     for (let i = 0; i < keys.length - 1; i++) {
+      if (!cur[keys[i]] || typeof cur[keys[i]] !== 'object') cur[keys[i]] = {};
       cur = cur[keys[i]];
     }
     cur[keys[keys.length - 1]] = value;
@@ -284,7 +332,7 @@ export function bindAlgorithmEditor(rootEl, algId, handlers) {
     const handleChange = (isCommit) => {
       const curParams = normalizeParams(getParams());
       let rawVal = el.type === 'checkbox' ? el.checked : el.value;
-      if (el.type === 'range' || el.type === 'number' || path === 'norgard.speedRatio' || path.startsWith('hanoi.pegIntervals.')) {
+      if (el.type === 'range' || el.type === 'number' || path === 'norgard.speedRatio' || path.startsWith('hanoi.pegIntervals.') || path.startsWith('pluginParams.')) {
         rawVal = Number(rawVal);
       }
 
@@ -445,15 +493,38 @@ export function bindAlgorithmEditor(rootEl, algId, handlers) {
   // Per-algorithm Reset & Seeded Randomise buttons
   const resetBtn = rootEl.querySelector(`[data-alg-reset="${algId}"]`);
   resetBtn?.addEventListener('click', () => {
-    const next = resetAlgorithmParams(getParams(), algId);
-    onUpdateParams(next, { rerenderSelf: true, commit: true });
+    if (['norgard', 'hanoi', 'bjorklund', 'lsystem'].includes(algId)) {
+      const next = resetAlgorithmParams(getParams(), algId);
+      onUpdateParams(next, { rerenderSelf: true, commit: true });
+      return;
+    }
+    const cur = normalizeParams(getParams());
+    const nextPluginParams = { ...(cur.pluginParams || {}), [algId]: { ...plugin.defaultParams } };
+    onUpdateParams(normalizeParams({ ...cur, pluginParams: nextPluginParams }), { rerenderSelf: true, commit: true });
   });
 
   const rndBtn = rootEl.querySelector(`[data-alg-random="${algId}"]`);
   rndBtn?.addEventListener('click', () => {
     randomSalt++;
-    const next = randomiseAlgorithmParams(getParams(), algId, randomSalt);
-    onUpdateParams(next, { rerenderSelf: true, commit: true });
+    if (['norgard', 'hanoi', 'bjorklund', 'lsystem'].includes(algId)) {
+      const next = randomiseAlgorithmParams(getParams(), algId, randomSalt);
+      onUpdateParams(next, { rerenderSelf: true, commit: true });
+      return;
+    }
+    const cur = normalizeParams(getParams());
+    const rng = createPRNG((cur.seed + 1) * 2654435761 ^ (randomSalt + algId.length * 131));
+    const sampled = { ...plugin.defaultParams };
+    for (const f of plugin.paramSchema || []) {
+      if (f.type === 'range') {
+        const step = f.step || 1;
+        const stepsCount = Math.max(1, Math.round((f.max - f.min) / step));
+        sampled[f.key] = Number((f.min + Math.floor(rng() * (stepsCount + 1)) * step).toFixed(2));
+      } else if (f.type === 'select' && f.options?.length) {
+        sampled[f.key] = f.options[Math.floor(rng() * f.options.length)].value;
+      }
+    }
+    const nextPluginParams = { ...(cur.pluginParams || {}), [algId]: sampled };
+    onUpdateParams(normalizeParams({ ...cur, pluginParams: nextPluginParams }), { rerenderSelf: true, commit: true });
   });
 }
 

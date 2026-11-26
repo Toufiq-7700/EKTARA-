@@ -1,20 +1,32 @@
 /**
- * Algorithm Lab Controller
+ * Algorithm Lab Controller (Role-Based Plugin Architecture)
  *
- * Manages the 4 Algorithm Selector Cards (On/Off + Solo), the active large
- * recursive simulation canvas, Lab playback controls (Play/Pause, Step Back/Fwd,
- * Speed 0.25x-2x, Replay, plain-English step captions), the "What You Hear"
- * 4-lane timeline strip, and bidirectional linked highlighting with the Garden.
+ * Manages the 4 Role Selector Cards (`melody`, `bass`, `rhythm`, `tree`),
+ * each with:
+ *   - Consistent role color & shape badge (◆, ▬, ●, ▲)
+ *   - Algorithm dropdown switching between registered plugins for that role
+ *   - Plain-English description + tiny preview
+ *   - On/Off switch and Solo button affecting both audio and Garden visuals
+ *   - Collapsible per-algorithm parameters from `paramSchema` + live stats
  *
- * Performance: Lab canvases only render when visible (`setVisible(true)`).
+ * Hosts the active simulation canvas, Lab Step Mode controls, and the
+ * "What You Hear" 4-lane piano roll with bidirectional Garden hover highlights.
  */
 
-import { ALGORITHMS, ALGORITHM_ORDER, formatEventCaption } from '../algorithms/meta.js';
+import { ROLES_META, ROLE_ORDER, formatEventCaption } from '../algorithms/meta.js';
+import { getAlgorithmPlugin, getAlgorithmsForRole } from '../algorithms/registry.js';
 import { LSYSTEM_PRESETS } from '../algorithms/lsystem.js';
+import { normalizeParams } from '../algorithms/params.js';
 import { createNorgardSim } from './simNorgard.js';
 import { createHanoiSim } from './simHanoi.js';
 import { createEuclideanSim } from './simEuclidean.js';
 import { createLSystemSim } from './simLSystem.js';
+import {
+  createThueMorseSim,
+  createFibonacciWordSim,
+  createGrayCodeSim,
+  createCantorSim
+} from './simPlugins.js';
 import { createTimelineStrip } from './timelineStrip.js';
 import { renderAlgorithmFields, bindAlgorithmEditor } from '../ui/paramEditors.js';
 
@@ -38,8 +50,8 @@ export function buildAlgorithmLab(container, callbacks) {
 
   let isVisible = false;
   let rafId = null;
-  let activeAlg = 'norgard';
-  let soloedAlg = null;
+  let activeRole = 'melody';
+  let soloedRole = null;
   let preSoloEnabled = null;
   let stepMode = false;
   let stepCursor = 0;
@@ -48,58 +60,82 @@ export function buildAlgorithmLab(container, callbacks) {
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const enabledMap = {
-    norgard: true,
-    hanoi: true,
-    bjorklund: true,
-    lsystem: true
+    melody: true,
+    bass: true,
+    rhythm: true,
+    tree: true
   };
 
-  const sims = {
-    norgard: createNorgardSim(),
-    hanoi: createHanoiSim(),
-    bjorklund: createEuclideanSim(),
-    lsystem: createLSystemSim()
+  // Dedicated Lab simulation per registered plugin id
+  const lsystemSim = createLSystemSim();
+  const euclidSim = createEuclideanSim();
+  const simsByPluginId = {
+    'norgard': createNorgardSim(),
+    'thue-morse': createThueMorseSim('melody'),
+    'fibonacci-word': createFibonacciWordSim(),
+    'hanoi': createHanoiSim(),
+    'gray-code': createGrayCodeSim(),
+    'cantor-bass': createCantorSim('bass'),
+    'bjorklund': euclidSim,
+    'cantor-rhythm': createCantorSim('rhythm'),
+    'thue-morse-rhythm': createThueMorseSim('rhythm'),
+    'lsystem': lsystemSim,
+    'koch-curve': lsystemSim,
+    'sierpinski-triangle': lsystemSim
   };
   const timeline = createTimelineStrip();
+
+  const initParams = normalizeParams(getParams());
 
   // ─── Render Lab DOM ──────────────────────────────────────────────
   container.innerHTML = `
     <div class="lab-shell" role="region" aria-label="Algorithm Lab">
-      <!-- 4 Algorithm Selector Cards -->
-      <div class="lab-cards" role="tablist" aria-label="Recursive algorithms">
-        ${ALGORITHM_ORDER.map(id => {
-          const m = ALGORITHMS[id];
+      <div class="lab-cards" role="tablist" aria-label="Musical roles and recursive algorithms">
+        ${ROLE_ORDER.map(role => {
+          const rm = ROLES_META[role];
+          const chosenId = initParams.roles?.[role];
+          const plugin = getAlgorithmPlugin(role, chosenId);
+          const choices = getAlgorithmsForRole(role);
+
           return `
-            <div class="lab-card ${id === activeAlg ? 'selected' : ''}" data-alg="${id}"
-                 style="--alg-color: ${m.color}; --alg-tint: ${m.bgTint};"
-                 tabindex="0" role="tab" aria-selected="${id === activeAlg}">
+            <div class="lab-card ${role === activeRole ? 'selected' : ''}" data-role="${role}"
+                 style="--alg-color: ${rm.color}; --alg-tint: ${rm.bgTint};"
+                 tabindex="0" role="tab" aria-selected="${role === activeRole}">
               <div class="lab-card-head">
                 <span class="lab-card-title">
-                  <span class="alg-shape" aria-hidden="true">${m.shape}</span>
-                  ${m.title}
+                  <span class="alg-shape" aria-hidden="true">${rm.shape}</span>
+                  ${rm.title}
                 </span>
                 <div class="lab-card-actions">
-                  <button class="lab-solo-btn" data-alg="${id}" aria-pressed="false" title="Solo ${m.shortName}">Solo</button>
-                  <label class="lab-switch" title="Enable/Disable ${m.shortName}">
-                    <input type="checkbox" class="lab-toggle-input" data-alg="${id}" checked aria-label="Enable ${m.title}" />
+                  <button class="lab-solo-btn" data-role="${role}" aria-pressed="false" title="Solo ${rm.title}">Solo</button>
+                  <label class="lab-switch" title="Enable/Disable ${rm.title}">
+                    <input type="checkbox" class="lab-toggle-input" data-role="${role}" checked aria-label="Enable ${rm.title}" />
                     <span class="lab-switch-track"></span>
                   </label>
                 </div>
               </div>
-              <p class="lab-card-desc">${m.description}</p>
-              <details class="lab-card-params-wrap" ${id === activeAlg ? 'open' : ''}>
+
+              <label class="lab-alg-picker">
+                <span class="sr-label">${rm.title} Algorithm</span>
+                <select class="lab-alg-select" data-role="${role}" aria-label="Choose algorithm for ${rm.title}">
+                  ${choices.map(ch => `<option value="${ch.id}"${ch.id === plugin.id ? ' selected' : ''}>${ch.name}</option>`).join('')}
+                </select>
+              </label>
+
+              <p class="lab-card-desc" data-role-desc="${role}">${plugin.description}</p>
+              <div class="lab-card-preview" data-role-preview="${role}">${plugin.preview}</div>
+
+              <details class="lab-card-params-wrap" ${role === activeRole ? 'open' : ''}>
                 <summary class="lab-card-params-toggle">Parameters</summary>
-                <div class="lab-card-params" data-alg-editor="${id}"></div>
+                <div class="lab-card-params" data-role-editor="${role}"></div>
               </details>
             </div>
           `;
         }).join('')}
       </div>
 
-      <!-- Safety Cap Warning Banner -->
       <div id="lab-cap-banner" class="lab-cap-banner" role="status" style="display:none;"></div>
 
-      <!-- Lab Playback & Step Controls -->
       <div class="lab-transport" role="group" aria-label="Lab playback controls">
         <div class="lab-transport-btns">
           <button id="lab-play-btn" class="lab-btn" aria-label="Play or Pause">⏸ Pause</button>
@@ -118,19 +154,16 @@ export function buildAlgorithmLab(container, callbacks) {
           </label>
         </div>
         <div id="lab-caption" class="lab-caption" role="status" aria-live="polite">
-          Live playback — select any card or click Step to inspect events one by one.
+          Live playback — select any role card, swap its algorithm, or click Step.
         </div>
       </div>
 
-      <!-- Context-sensitive sliders for Euclidean (k, n) or L-System (Gen) -->
       <div id="lab-subcontrols" class="lab-subcontrols"></div>
 
-      <!-- Main Live Simulation Canvas -->
       <div class="lab-sim-wrap">
         <canvas id="lab-sim-canvas" class="lab-sim-canvas" aria-label="Active recursive algorithm simulation"></canvas>
       </div>
 
-      <!-- "What You Hear" 4-Track Piano Roll -->
       <div class="lab-timeline-wrap">
         <div class="lab-timeline-header">
           <span>What You Hear — Combined Recursive Layers</span>
@@ -150,36 +183,52 @@ export function buildAlgorithmLab(container, callbacks) {
   const captionEl = container.querySelector('#lab-caption');
   const playBtn = container.querySelector('#lab-play-btn');
 
-  function renderCardEditor(algId, forceRender = false) {
-    const host = container.querySelector(`[data-alg-editor="${algId}"]`);
+  function getActivePluginForRole(role) {
+    const p = normalizeParams(getParams());
+    return getAlgorithmPlugin(role, p.roles?.[role]);
+  }
+
+  function renderCardMetaAndEditor(role, forceRender = false) {
+    const p = normalizeParams(getParams());
+    const plugin = getAlgorithmPlugin(role, p.roles?.[role]);
+
+    const sel = container.querySelector(`.lab-alg-select[data-role="${role}"]`);
+    if (sel) sel.value = plugin.id;
+
+    const descEl = container.querySelector(`[data-role-desc="${role}"]`);
+    if (descEl) descEl.textContent = plugin.description;
+
+    const prevEl = container.querySelector(`[data-role-preview="${role}"]`);
+    if (prevEl) prevEl.textContent = plugin.preview;
+
+    const host = container.querySelector(`[data-role-editor="${role}"]`);
     if (!host) return;
     if (!forceRender && host.contains(document.activeElement)) {
       const statsEl = host.querySelector('.alg-stats-line');
-      const statsText = getScore()?.stats?.[algId === 'bjorklund' ? 'euclid' : algId];
+      const statsText = getScore()?.stats?.[role];
       if (statsEl && statsText) statsEl.textContent = statsText;
       return;
     }
-    host.innerHTML = renderAlgorithmFields(algId, getParams(), getScore()?.stats);
-    bindAlgorithmEditor(host, algId, {
+
+    host.innerHTML = renderAlgorithmFields(role, p, getScore()?.stats);
+    bindAlgorithmEditor(host, role, {
       getParams,
       onImmediatePreview: (nextParams) => {
-        if (algId === 'bjorklund') {
+        if (plugin.id === 'bjorklund') {
           const r0 = nextParams.euclid.rings[0];
-          sims.bjorklund.setKN(r0.pulses, r0.steps);
+          euclidSim.setKN(r0.pulses, r0.steps);
         }
       },
       onUpdateParams: (nextParams, { rerenderSelf }) => {
         onDebouncedParamsChange(nextParams);
-        if (rerenderSelf) {
-          renderCardEditor(algId, true);
-        }
+        if (rerenderSelf) renderCardMetaAndEditor(role, true);
       }
     });
   }
 
-  function renderAllCardEditors(force = false) {
-    for (const id of ALGORITHM_ORDER) {
-      renderCardEditor(id, force);
+  function renderAllCards(force = false) {
+    for (const role of ROLE_ORDER) {
+      renderCardMetaAndEditor(role, force);
     }
     const capMsg = getScore()?.stats?.capNotice;
     if (capBanner) {
@@ -192,44 +241,46 @@ export function buildAlgorithmLab(container, callbacks) {
     }
   }
 
-  // ─── Helper: Sync On/Off & Solo States ───────────────────────────
-  function applyEnabledState(id, enabled) {
-    enabledMap[id] = enabled;
-    setAlgorithmEnabled(id, enabled);
-    setVisualAlgorithmEnabled(id, enabled);
-    const card = container.querySelector(`.lab-card[data-alg="${id}"]`);
-    const chk = container.querySelector(`.lab-toggle-input[data-alg="${id}"]`);
+  function applyEnabledState(role, enabled) {
+    enabledMap[role] = enabled;
+    setAlgorithmEnabled(role, enabled);
+    setVisualAlgorithmEnabled(role, enabled);
+    const card = container.querySelector(`.lab-card[data-role="${role}"]`);
+    const chk = container.querySelector(`.lab-toggle-input[data-role="${role}"]`);
     if (chk) chk.checked = enabled;
     if (card) card.classList.toggle('disabled', !enabled);
   }
 
   function updateSoloButtons() {
     container.querySelectorAll('.lab-solo-btn').forEach(btn => {
-      const isSolo = btn.dataset.alg === soloedAlg;
+      const isSolo = btn.dataset.role === soloedRole;
       btn.classList.toggle('active', isSolo);
       btn.setAttribute('aria-pressed', String(isSolo));
     });
   }
 
   function renderSubControls() {
-    const params = getParams();
-    if (activeAlg === 'lsystem') {
-      const lCfg = params.lsystem || {};
-      const preset = LSYSTEM_PRESETS[lCfg.preset || params.lsystemPreset || 'Fern'] || LSYSTEM_PRESETS['Fern'];
-      const maxGen = lCfg.generations ?? Math.min(params.depth || 4, preset.maxGen || 5);
+    const params = normalizeParams(getParams());
+    const activeTreePlugin = getActivePluginForRole('tree');
+    if (activeRole === 'tree') {
+      const scoreCfg = getScore()?.lsystemConfig;
+      const preset = LSYSTEM_PRESETS[scoreCfg?.preset || params.lsystem?.preset || 'Fern'] || LSYSTEM_PRESETS['Fern'];
+      const maxGen = activeTreePlugin.id === 'lsystem'
+        ? (params.lsystem?.generations ?? 4)
+        : (params.pluginParams?.[activeTreePlugin.id]?.generations ?? Math.min(preset.maxGen || 4, params.depth));
       subControls.style.display = 'flex';
       subControls.innerHTML = `
         <label class="lab-sub-item">
           <span>Scrub Generation: <strong id="lab-gen-val">${maxGen}</strong></span>
-          <input type="range" id="lab-gen-slider" min="0" max="${maxGen}" value="${maxGen}" aria-label="L-system generation scrubber" />
+          <input type="range" id="lab-gen-slider" min="0" max="${maxGen}" value="${maxGen}" aria-label="Generation scrubber" />
         </label>
       `;
       const gSlider = subControls.querySelector('#lab-gen-slider');
-      sims.lsystem.setGeneration(maxGen);
+      lsystemSim.setGeneration(maxGen);
       gSlider.addEventListener('input', () => {
         const g = parseInt(gSlider.value, 10);
         subControls.querySelector('#lab-gen-val').textContent = String(g);
-        sims.lsystem.setGeneration(g);
+        lsystemSim.setGeneration(g);
       });
     } else {
       subControls.style.display = 'none';
@@ -237,62 +288,82 @@ export function buildAlgorithmLab(container, callbacks) {
     }
   }
 
-  function selectAlgorithm(id) {
-    activeAlg = id;
+  function selectRole(role) {
+    activeRole = role;
     container.querySelectorAll('.lab-card').forEach(c => {
-      const sel = c.dataset.alg === id;
+      const sel = c.dataset.role === role;
       c.classList.toggle('selected', sel);
       c.setAttribute('aria-selected', String(sel));
     });
-    if (id !== 'bjorklund') sims.bjorklund.setKN(null, null);
+    if (getActivePluginForRole(role).id !== 'bjorklund') {
+      euclidSim.setKN(null, null);
+    }
     renderSubControls();
   }
 
-  // ─── Card Events ─────────────────────────────────────────────────
+  // ─── Card, Dropdown, On/Off & Solo Events ───────────────────────
   container.querySelectorAll('.lab-card').forEach(card => {
-    const id = card.dataset.alg;
+    const role = card.dataset.role;
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.lab-card-actions') || e.target.closest('.lab-card-params-wrap')) return;
-      selectAlgorithm(id);
+      if (e.target.closest('.lab-card-actions') || e.target.closest('.lab-card-params-wrap') || e.target.closest('.lab-alg-picker')) {
+        return;
+      }
+      selectRole(role);
     });
     card.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
-        if (e.target.closest('.lab-card-actions') || e.target.closest('.lab-card-params-wrap')) return;
+        if (e.target.closest('.lab-card-actions') || e.target.closest('.lab-card-params-wrap') || e.target.closest('.lab-alg-picker')) {
+          return;
+        }
         e.preventDefault();
-        selectAlgorithm(id);
+        selectRole(role);
       }
     });
   });
 
-  renderAllCardEditors(true);
+  container.querySelectorAll('.lab-alg-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const role = e.target.dataset.role;
+      const nextPluginId = e.target.value;
+      const cur = normalizeParams(getParams());
+      const nextParams = normalizeParams({
+        ...cur,
+        roles: { ...cur.roles, [role]: nextPluginId }
+      });
+      selectRole(role);
+      onDebouncedParamsChange(nextParams);
+      renderCardMetaAndEditor(role, true);
+    });
+  });
 
   container.querySelectorAll('.lab-toggle-input').forEach(chk => {
     chk.addEventListener('change', (e) => {
-      soloedAlg = null;
+      soloedRole = null;
       preSoloEnabled = null;
       updateSoloButtons();
-      applyEnabledState(e.target.dataset.alg, e.target.checked);
+      applyEnabledState(e.target.dataset.role, e.target.checked);
     });
   });
 
   container.querySelectorAll('.lab-solo-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const id = btn.dataset.alg;
-      if (soloedAlg === id) {
-        // Restore previous states
-        const restore = preSoloEnabled || { norgard: true, hanoi: true, bjorklund: true, lsystem: true };
-        soloedAlg = null;
+      const role = btn.dataset.role;
+      if (soloedRole === role) {
+        const restore = preSoloEnabled || { melody: true, bass: true, rhythm: true, tree: true };
+        soloedRole = null;
         preSoloEnabled = null;
-        for (const alg of ALGORITHM_ORDER) applyEnabledState(alg, restore[alg]);
+        for (const r of ROLE_ORDER) applyEnabledState(r, restore[r]);
       } else {
         preSoloEnabled = { ...enabledMap };
-        soloedAlg = id;
-        for (const alg of ALGORITHM_ORDER) applyEnabledState(alg, alg === id);
-        selectAlgorithm(id);
+        soloedRole = role;
+        for (const r of ROLE_ORDER) applyEnabledState(r, r === role);
+        selectRole(role);
       }
       updateSoloButtons();
     });
   });
+
+  renderAllCards(true);
 
   // ─── Transport & Step Mode ───────────────────────────────────────
   function updatePlayBtnLabel(playing) {
@@ -372,7 +443,9 @@ export function buildAlgorithmLab(container, callbacks) {
 
   simCanvas.addEventListener('mousemove', (e) => {
     const rect = simCanvas.getBoundingClientRect();
-    const hit = sims[activeAlg]?.hitTest(e.clientX - rect.left, e.clientY - rect.top);
+    const plugin = getActivePluginForRole(activeRole);
+    const sim = simsByPluginId[plugin.id];
+    const hit = sim?.hitTest(e.clientX - rect.left, e.clientY - rect.top);
     onHoverTarget(hit || null);
   });
   simCanvas.addEventListener('mouseleave', () => onHoverTarget(null));
@@ -411,10 +484,12 @@ export function buildAlgorithmLab(container, callbacks) {
     }
     const score = getScore();
     const t = stepMode ? stepTime : getCurrentTime();
+    const activePlugin = getActivePluginForRole(activeRole);
+    const sim = simsByPluginId[activePlugin.id];
 
     const simDims = sizeCanvas(simCanvas, simCtx);
-    if (simDims && score) {
-      sims[activeAlg].draw(simCtx, simDims.w, simDims.h, {
+    if (simDims && score && sim) {
+      sim.draw(simCtx, simDims.w, simDims.h, {
         score,
         currentTime: t,
         hoveredTarget,
@@ -440,9 +515,7 @@ export function buildAlgorithmLab(container, callbacks) {
     if (isVisible) {
       renderSubControls();
       updatePlayBtnLabel(isAudioPlaying());
-      if (!rafId) {
-        rafId = requestAnimationFrame(renderFrame);
-      }
+      if (!rafId) rafId = requestAnimationFrame(renderFrame);
     } else if (rafId) {
       cancelAnimationFrame(rafId);
       rafId = null;
@@ -454,14 +527,16 @@ export function buildAlgorithmLab(container, callbacks) {
   }
 
   function onScoreUpdated() {
-    if (activeAlg !== 'bjorklund') sims.bjorklund.setKN(null, null);
-    renderAllCardEditors(false);
+    if (getActivePluginForRole('rhythm').id !== 'bjorklund') {
+      euclidSim.setKN(null, null);
+    }
+    renderAllCards(false);
     if (isVisible) renderSubControls();
   }
 
   function syncAllFromParams(_params, _score) {
-    sims.bjorklund.setKN(null, null);
-    renderAllCardEditors(false);
+    euclidSim.setKN(null, null);
+    renderAllCards(true);
     if (isVisible) renderSubControls();
   }
 

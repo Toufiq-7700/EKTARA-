@@ -14,7 +14,8 @@ import { SCALES } from '../algorithms/scales.js';
 import { THEMES } from '../visuals/themes.js';
 import { createPRNG } from '../algorithms/prng.js';
 import { TIMBRE_OPTIONS, DEFAULT_TIMBRES } from '../audio/instruments.js';
-import { ALGORITHMS, ALGORITHM_ORDER } from '../algorithms/meta.js';
+import { ALGORITHMS, ALGORITHM_ORDER, ROLES_META, ROLE_ORDER } from '../algorithms/meta.js';
+import { getAlgorithmsForRole, getAlgorithmPlugin } from '../algorithms/registry.js';
 import { GARDEN_PRESETS, applyDepthToParams, normalizeParams } from '../algorithms/params.js';
 import { renderAlgorithmFields, bindAlgorithmEditor } from './paramEditors.js';
 
@@ -192,14 +193,20 @@ export function buildUI(container, callbacks) {
         <!-- Recursion Parameters (mirrored with Algorithm Lab) -->
         <details class="control-group recursion-params-panel" open aria-label="Recursion Parameters">
           <summary>Recursion Parameters</summary>
-          <p class="control-hint">User-defined parameters per algorithm (live synced with Lab)</p>
+          <p class="control-hint">Algorithm choice & parameters per role (live synced with Lab)</p>
           <p id="drawer-cap-notice" class="alg-cap-warning" role="status" style="display:none;"></p>
-          ${ALGORITHM_ORDER.map(id => {
-            const m = ALGORITHMS[id];
+          ${ROLE_ORDER.map(role => {
+            const m = ROLES_META[role];
+            const choices = getAlgorithmsForRole(role);
             return `
-              <details class="drawer-alg-section" ${id === 'norgard' ? 'open' : ''}>
+              <details class="drawer-alg-section" ${role === 'melody' ? 'open' : ''}>
                 <summary style="color:${m.color};">${m.shape} ${m.title}</summary>
-                <div class="drawer-alg-editor" data-drawer-editor="${id}"></div>
+                <div class="drawer-role-picker">
+                  <select class="drawer-alg-select" data-role="${role}" aria-label="Choose ${m.title} algorithm">
+                    ${choices.map(ch => `<option value="${ch.id}">${ch.name}</option>`).join('')}
+                  </select>
+                </div>
+                <div class="drawer-alg-editor" data-drawer-editor="${role}"></div>
               </details>
             `;
           }).join('')}
@@ -708,28 +715,46 @@ export function buildUI(container, callbacks) {
   }
 
   // ─── Mirrored Recursion Parameter Editors in Drawer ─────
-  function renderDrawerEditor(algId, force = false) {
-    const host = container.querySelector(`[data-drawer-editor="${algId}"]`);
+  container.querySelectorAll('.drawer-alg-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const role = e.target.dataset.role;
+      const cur = normalizeParams(getParams());
+      const next = normalizeParams({
+        ...cur,
+        roles: { ...cur.roles, [role]: e.target.value }
+      });
+      onDebouncedParamsChange(next);
+      renderDrawerEditor(role, true);
+    });
+  });
+
+  function renderDrawerEditor(role, force = false) {
+    const p = normalizeParams(getParams());
+    const sel = container.querySelector(`.drawer-alg-select[data-role="${role}"]`);
+    const plugin = getAlgorithmPlugin(role, p.roles?.[role]);
+    if (sel) sel.value = plugin.id;
+
+    const host = container.querySelector(`[data-drawer-editor="${role}"]`);
     if (!host) return;
     if (!force && host.contains(document.activeElement)) {
       const statsEl = host.querySelector('.alg-stats-line');
-      const statsText = getScore?.()?.stats?.[algId === 'bjorklund' ? 'euclid' : algId];
+      const statsText = getScore?.()?.stats?.[role];
       if (statsEl && statsText) statsEl.textContent = statsText;
       return;
     }
-    host.innerHTML = renderAlgorithmFields(algId, getParams(), getScore?.()?.stats);
-    bindAlgorithmEditor(host, algId, {
+    host.innerHTML = renderAlgorithmFields(role, p, getScore?.()?.stats);
+    bindAlgorithmEditor(host, role, {
       getParams,
       onUpdateParams: (nextParams, { rerenderSelf }) => {
         onDebouncedParamsChange(nextParams);
-        if (rerenderSelf) renderDrawerEditor(algId, true);
+        if (rerenderSelf) renderDrawerEditor(role, true);
       }
     });
   }
 
   function renderAllDrawerEditors(force = false) {
-    for (const id of ALGORITHM_ORDER) {
-      renderDrawerEditor(id, force);
+    for (const role of ROLE_ORDER) {
+      renderDrawerEditor(role, force);
     }
     const notice = container.querySelector('#drawer-cap-notice');
     const capMsg = getScore?.()?.stats?.capNotice;
