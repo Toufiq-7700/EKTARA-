@@ -382,3 +382,17 @@ Upgraded every musical layer in `src/audio/instruments.js`, `src/audio/graph.js`
 
 ---
 
+## Prompt 12: Fix Right-Side Drawer Close Button
+
+### Prompt
+
+the right side slide i can open by clicking but it dosent any close button, fix this please
+
+### Response
+
+Fixed the right-side control drawer close button in `src/ui/controls.js` and `src/styles.css`:
+- Moved `#panel-toggle` (`☰ Controls`) outside `#control-panel`'s `overflow-y: auto` container (which was clipping the `left: -40px` toggle button once opened).
+- Added a sticky `.panel-header` inside `#panel-content` with a visible `#panel-close-btn` (`✕`) pinned at the top-right of the drawer so it remains accessible even when scrolling, plus `Escape` key support to close the drawer.
+- Verified `npm test` (55/55 passing) and `npm run build` succeed cleanly.
+
+---

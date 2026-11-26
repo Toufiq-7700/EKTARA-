@@ -71,13 +71,18 @@ export function buildUI(container, callbacks) {
   // ─── Build HTML ──────────────────────────────────────────
 
   container.innerHTML = `
+    <button id="panel-toggle" class="panel-toggle" aria-label="Open controls panel" title="Open controls (H)">
+      ☰ Controls
+    </button>
+
     <div id="control-panel" class="control-panel" role="complementary" aria-label="Controls">
-      <button id="panel-toggle" class="panel-toggle" aria-label="Toggle control panel" title="Toggle controls">
-        ☰
-      </button>
-      
       <div id="panel-content" class="panel-content">
-        <h2 class="panel-title">🌳 Recursive Garden</h2>
+        <div class="panel-header">
+          <h2 class="panel-title">🌳 Recursive Garden</h2>
+          <button id="panel-close-btn" class="panel-close-btn" aria-label="Close controls panel" title="Close controls (Esc or H)">
+            ✕
+          </button>
+        </div>
         
         <!-- Transport controls -->
         <div class="control-group transport" role="group" aria-label="Playback controls">
@@ -334,16 +339,19 @@ export function buildUI(container, callbacks) {
   const panel = container.querySelector('#control-panel');
   const panelContent = container.querySelector('#panel-content');
   const panelToggle = container.querySelector('#panel-toggle');
+  const panelCloseBtn = container.querySelector('#panel-close-btn');
 
-  // Panel toggle
+  // Panel open/close (toggle button floats outside drawer when closed; close button sits in sticky drawer header)
   function setPanelOpen(open) {
     panelVisible = !!open;
-    panelContent.style.display = panelVisible ? 'block' : 'none';
+    panel.style.display = panelVisible ? 'block' : 'none';
     panel.classList.toggle('collapsed', !panelVisible);
-    panelToggle.textContent = panelVisible ? '✕' : '☰';
+    panelToggle.style.display = panelVisible ? 'none' : 'inline-flex';
+    panelToggle.setAttribute('aria-expanded', String(panelVisible));
   }
 
-  panelToggle.addEventListener('click', () => setPanelOpen(!panelVisible));
+  panelToggle.addEventListener('click', () => setPanelOpen(true));
+  panelCloseBtn.addEventListener('click', () => setPanelOpen(false));
 
   // Auto-hide on idle
   function resetHideTimer() {
@@ -692,7 +700,10 @@ export function buildUI(container, callbacks) {
         break;
       case 'h':
       case 'H':
-        panelToggle.click();
+        setPanelOpen(!panelVisible);
+        break;
+      case 'Escape':
+        if (panelVisible) setPanelOpen(false);
         break;
     }
   });
