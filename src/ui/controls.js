@@ -243,11 +243,12 @@ export function buildUI(container, callbacks) {
             ['canon', 'controls.layerCanon'],
             ['bass', 'controls.layerBass'],
             ['percussion', 'controls.layerPercussion'],
-            ['ambient', 'controls.layerAmbient']
+            ['ambient', 'controls.layerAmbient'],
+            ['drone', 'controls.layerDrone']
           ].map(([layer, key]) => `
             <div class="slider-row layer-row">
               <label for="vol-${layer}" class="layer-label" data-i18n="${key}">${t(key)}</label>
-              <input type="range" id="vol-${layer}" min="0" max="100" value="${layer === 'ambient' ? 50 : 70}" 
+              <input type="range" id="vol-${layer}" min="0" max="100" value="${layer === 'ambient' ? 50 : layer === 'drone' ? 45 : 70}" 
                      class="layer-slider" data-layer="${layer}" aria-label="${layer} volume" />
               <button class="mute-btn" data-layer="${layer}" aria-label="Mute ${layer}">🔈</button>
             </div>
@@ -311,6 +312,7 @@ export function buildUI(container, callbacks) {
             <p>🗼 <span data-i18n="controls.explainerHanoi">${t('controls.explainerHanoi')}</span></p>
             <p>⭕ <span data-i18n="controls.explainerEuclid">${t('controls.explainerEuclid')}</span></p>
             <p>🌿 <span data-i18n="controls.explainerLsystem">${t('controls.explainerLsystem')}</span></p>
+            <p>🪕 <span data-i18n="controls.explainerEktara">${t('controls.explainerEktara')}</span></p>
           </div>
         </details>
 
@@ -854,6 +856,9 @@ export function buildUI(container, callbacks) {
   // Initialize from current params
   const params = getParams();
   updateControlsFromParams(params);
+
+  // Start with panel closed
+  setPanelOpen(false);
 
   function updateZoomDisplay(level) {
     const pct = Math.round(Math.max(50, Math.min(400, level * 100)));

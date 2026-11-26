@@ -62,6 +62,7 @@ export const ALGORITHM_ORDER = ROLE_ORDER;
  */
 export function resolveEventRole(event) {
   if (!event) return 'melody';
+  if (event.voice === 'drone' || event.meta?.role === 'drone') return 'drone';
   if (event.meta?.role) return event.meta.role;
   if (event.voice === 'melody' || event.voice === 'canon') return 'melody';
   if (event.voice === 'bass') return 'bass';

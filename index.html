@@ -1,27 +1,105 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EKTARA</title>
+  <title>EKTARA · একতারা</title>
   <link rel="stylesheet" href="/src/styles.css" />
 </head>
+
 <body>
-  <!-- Welcome screen -->
-  <div id="welcome-screen" class="welcome-screen">
-    <div class="welcome-content">
-      <h1 class="welcome-title">EKTARA</h1>
-      <p id="welcome-tagline" class="welcome-tagline">Where algorithms meet sound</p>
-      <p id="welcome-subtitle" class="welcome-subtitle">
-        One string, one rule, infinite music. Four recursive algorithms weave melody,
-        bass, rhythm, and living visuals from a single seed.
-      </p>
-      <button id="begin-btn" class="begin-btn" aria-label="Begin the experience">
-        Begin
-      </button>
-      <p id="welcome-hint" class="welcome-hint">🎧 Headphones recommended</p>
-    </div>
-  </div>
+  <!-- Immersive Landing / Welcome Screen -->
+  <main id="welcome-screen" class="welcome-screen" aria-label="EKTARA Welcome">
+    <section class="landing-hero" aria-labelledby="welcome-title">
+      <canvas id="landing-canvas" class="landing-canvas" aria-hidden="true"></canvas>
+      <div id="ektara-string-zone" class="ektara-string-zone" aria-hidden="true"></div>
+
+      <div class="welcome-lang-bar" role="group" aria-label="Language selector">
+        <button type="button" class="lang-btn active" data-lang="en" aria-pressed="true">EN</button>
+        <span class="lang-sep" aria-hidden="true">|</span>
+        <button type="button" class="lang-btn" data-lang="bn" aria-pressed="false">বাংলা</button>
+      </div>
+
+      <div class="welcome-content">
+        <div class="ektara-logo" aria-hidden="true">
+          <svg width="42" height="54" viewBox="0 0 42 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <line x1="21" y1="4" x2="21" y2="41" stroke="#f6c98e" stroke-width="1.8" stroke-linecap="round" />
+            <circle cx="21" cy="5" r="2.5" fill="#f6c98e" />
+            <path d="M13 38 C13 31, 29 31, 29 38 C29 45, 25 50, 21 50 C17 50, 13 45, 13 38 Z" stroke="#f0a060"
+              stroke-width="1.8" fill="rgba(240,160,96,0.12)" />
+            <line x1="16" y1="22" x2="26" y2="22" stroke="rgba(246,201,142,0.45)" stroke-width="1.2"
+              stroke-linecap="round" />
+          </svg>
+        </div>
+
+        <h1 id="welcome-title" class="welcome-title">EKTARA</h1>
+        <p class="welcome-native" lang="bn">একতারা</p>
+        <p id="welcome-tagline" class="welcome-tagline">Where algorithms meet sound</p>
+
+        <button id="begin-btn" class="begin-btn" aria-label="Begin the journey">
+          Begin the journey
+        </button>
+
+        <div class="welcome-hints">
+          <p id="welcome-hint" class="welcome-hint">🎧 Best with headphones</p>
+          <p id="welcome-sound-hint" class="welcome-sound-hint">Sound will start softly</p>
+        </div>
+
+        <a href="#how-it-works" id="how-it-works-link" class="how-link">How it works ↓</a>
+      </div>
+    </section>
+
+    <section id="how-it-works" class="how-section" aria-labelledby="how-it-works-title">
+      <div class="how-inner">
+        <h2 id="how-it-works-title" class="how-title">How it works</h2>
+        <p id="how-it-works-oneliner" class="how-oneliner">One seed. Four recursive rules. Endless music.</p>
+
+        <div class="how-grid">
+          <article class="how-card" style="--card-color: #f0c878;">
+            <canvas id="mini-canvas-norgard" class="how-mini-canvas" width="160" height="64"
+              aria-hidden="true"></canvas>
+            <h3 id="card-norgard-title" class="how-card-title">Nørgård Infinity Series</h3>
+            <p id="card-norgard-desc" class="how-card-desc">A melody that contains itself</p>
+          </article>
+
+          <article class="how-card" style="--card-color: #78c8f0;">
+            <canvas id="mini-canvas-hanoi" class="how-mini-canvas" width="160" height="64" aria-hidden="true"></canvas>
+            <h3 id="card-hanoi-title" class="how-card-title">Tower of Hanoi</h3>
+            <p id="card-hanoi-desc" class="how-card-desc">Moves that become a heartbeat</p>
+          </article>
+
+          <article class="how-card" style="--card-color: #a0f078;">
+            <canvas id="mini-canvas-euclid" class="how-mini-canvas" width="160" height="64" aria-hidden="true"></canvas>
+            <h3 id="card-euclid-title" class="how-card-title">Euclidean Rhythm</h3>
+            <p id="card-euclid-desc" class="how-card-desc">Evenly spread pulses</p>
+          </article>
+
+          <article class="how-card" style="--card-color: #f078c8;">
+            <canvas id="mini-canvas-lsystem" class="how-mini-canvas" width="160" height="64"
+              aria-hidden="true"></canvas>
+            <h3 id="card-lsystem-title" class="how-card-title">L-System</h3>
+            <p id="card-lsystem-desc" class="how-card-desc">A tree grown by rewriting rules</p>
+          </article>
+        </div>
+
+        <footer class="landing-footer">
+          <span id="footer-built-for">Built for [HUB'S QUEST • EPOCH 1 ]</span>
+          <span class="footer-dot" aria-hidden="true">·</span>
+          <button type="button" id="about-name-btn" class="about-name-btn">About the name</button>
+        </footer>
+      </div>
+    </section>
+
+    <dialog id="about-name-dialog" class="about-dialog" aria-labelledby="about-dialog-title">
+      <div class="about-dialog-inner">
+        <h3 id="about-dialog-title" class="about-dialog-title">Why "EKTARA"?</h3>
+        <p id="about-dialog-en" class="about-dialog-text"></p>
+        <p id="about-dialog-bn" class="about-dialog-text about-dialog-bn" lang="bn"></p>
+        <button type="button" id="about-dialog-close" class="about-dialog-close">Close</button>
+      </div>
+    </dialog>
+  </main>
 
   <!-- Top View Switcher (Garden / Split / Lab) -->
   <header id="view-switcher" class="view-switcher" aria-label="Workspace view" style="display:none;">
@@ -36,6 +114,10 @@
   <div id="workspace-layout" class="workspace-layout view-garden" style="display:none;">
     <div id="garden-stage" class="garden-stage">
       <canvas id="garden-canvas" class="garden-canvas"></canvas>
+      <div id="garden-ektara-string" class="garden-ektara-string" tabindex="0" role="slider"
+           aria-label="Playable virtual ektara string" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"
+           aria-valuetext="C3" title="Click, tap, drag, or press Enter/Space to pluck (Up/Down arrows change pitch)">
+      </div>
     </div>
     <section id="lab-panel" class="lab-panel" aria-label="Algorithm Lab" style="display:none;"></section>
   </div>
@@ -51,4 +133,5 @@
 
   <script type="module" src="/src/main.js"></script>
 </body>
+
 </html>

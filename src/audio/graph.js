@@ -13,7 +13,8 @@ import {
   createMelodyVoice,
   createBassVoice,
   createPadVoice,
-  createPercussionVoices
+  createPercussionVoices,
+  createDroneVoice
 } from './instruments.js';
 
 export const DEFAULT_LAYER_VOLUMES = {
@@ -21,7 +22,8 @@ export const DEFAULT_LAYER_VOLUMES = {
   canon: 0.5,
   bass: 0.6,
   percussion: 0.4,
-  ambient: 0.5
+  ambient: 0.5,
+  drone: 0.45
 };
 
 export const DEFAULT_LAYER_MIX_DB = {
@@ -29,7 +31,8 @@ export const DEFAULT_LAYER_MIX_DB = {
   canon: -10,
   bass: -6,
   percussion: -12,
-  ambient: -10
+  ambient: -10,
+  drone: -11
 };
 
 export const EXPORT_TAIL_SECONDS = 6;
@@ -68,14 +71,17 @@ export async function createAudioGraph(options = {}) {
     bass: false,
     percussion: false,
     ambient: false,
+    drone: false,
     ...(options.layerMuted || {})
   };
   const timbres = { ...DEFAULT_TIMBRES, ...(options.timbres || {}) };
   const masterVolume = options.masterVolume ?? 0.8;
   const ambientType = options.ambientType || 'wind';
 
-  // Master chain: reverb -> limiter (-3 dB) -> master volume -> destination
+  // Master chain: reverb -> limiter (-3 dB) -> master volume -> meter/destination
   const masterVol = new Tone.Volume(volumeToDb(masterVolume, -6)).toDestination();
+  const meter = new Tone.Meter({ smoothing: 0.85 });
+  masterVol.connect(meter);
   const limiter = new Tone.Limiter(-3).connect(masterVol);
   const reverb = new Tone.Reverb({ decay: EXPORT_TAIL_SECONDS, wet: 0.42 }).connect(limiter);
   await reverb.ready;
@@ -102,6 +108,10 @@ export async function createAudioGraph(options = {}) {
     volume: volumeToDb(layerVolumes.ambient, DEFAULT_LAYER_MIX_DB.ambient),
     mute: !!layerMuted.ambient
   }).connect(reverb);
+  const droneCh = new Tone.Channel({
+    volume: volumeToDb(layerVolumes.drone, DEFAULT_LAYER_MIX_DB.drone),
+    mute: !!layerMuted.drone
+  }).connect(reverb);
 
   // Subtle delayed vibrato for melody & canon notes
   const melodyVibrato = new Tone.Vibrato({ frequency: 4.6, depth: 0.045, type: 'sine' }).connect(melodyCh);
@@ -115,6 +125,7 @@ export async function createAudioGraph(options = {}) {
   let bassSynth = createBassVoice(timbres.bass, bassCh);
   let percVoices = createPercussionVoices(timbres.percussion, percCh);
   let ambientPad = createPadVoice(timbres.ambient, ambientCh);
+  let droneSynth = createDroneVoice(droneCh);
 
   // Ambient wind noise
   const ambientNoiseVol = new Tone.Volume(-26).connect(ambientCh);
@@ -130,6 +141,7 @@ export async function createAudioGraph(options = {}) {
 
   const graph = {
     masterVol,
+    meter,
     limiter,
     reverb,
     delay,
@@ -139,7 +151,8 @@ export async function createAudioGraph(options = {}) {
       canon: canonCh,
       bass: bassCh,
       percussion: percCh,
-      ambient: ambientCh
+      ambient: ambientCh,
+      drone: droneCh
     },
     melodyVibrato,
     canonVibrato,
@@ -148,6 +161,7 @@ export async function createAudioGraph(options = {}) {
     get bassSynth() { return bassSynth; },
     get percVoices() { return percVoices; },
     get ambientPad() { return ambientPad; },
+    get droneSynth() { return droneSynth; },
     ambientNoise,
     ambientNoiseFilter,
     ambientNoiseVol,
@@ -207,11 +221,12 @@ export async function createAudioGraph(options = {}) {
       try { bassSynth?.dispose(); } catch (_) { /* ignore */ }
       try { percVoices?.dispose(); } catch (_) { /* ignore */ }
       try { ambientPad?.dispose(); } catch (_) { /* ignore */ }
+      try { droneSynth?.dispose(); } catch (_) { /* ignore */ }
       const nodes = [
         melodyVibrato, canonVibrato,
         ambientNoise, ambientNoiseFilter, ambientNoiseVol,
-        melodyCh, canonCh, bassCh, percCh, ambientCh,
-        delay, reverb, limiter, masterVol
+        melodyCh, canonCh, bassCh, percCh, ambientCh, droneCh,
+        delay, reverb, limiter, meter, masterVol
       ];
       for (const node of nodes) {
         try { node?.dispose(); } catch (_) { /* ignore */ }
@@ -268,5 +283,10 @@ export function triggerScoreEvent(graph, event, time, layerMuted = {}) {
       }
       break;
     }
+    case 'drone':
+      if (pitchArg && graph.droneSynth) {
+        graph.droneSynth.triggerAttackRelease(pitchArg, safeDur, time, safeVel, event.meta?.bendCents || 0);
+      }
+      break;
   }
 }

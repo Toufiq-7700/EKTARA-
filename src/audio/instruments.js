@@ -415,3 +415,69 @@ export function createPercussionVoices(timbre, destination) {
     }
   };
 }
+
+/**
+ * Create the soft Ektara Drone voice:
+ * Karplus-Strong plucked string (Tone.PluckSynth) blended with a warm filtered
+ * triangle body that supports slow 20–40 cent pitch bends like a pressed ektara handle.
+ */
+export function createDroneVoice(destination) {
+  const filter = new Tone.Filter({
+    frequency: 980,
+    type: 'lowpass',
+    Q: 0.75
+  }).connect(destination);
+
+  const pluck = new Tone.PluckSynth({
+    attackNoise: 0.6,
+    dampening: 2600,
+    resonance: 0.94,
+    release: 1.8,
+    volume: -6
+  }).connect(filter);
+
+  const body = new Tone.MonoSynth({
+    oscillator: { type: 'triangle' },
+    envelope: {
+      attack: 0.025,
+      decay: 1.4,
+      sustain: 0.25,
+      release: 2.2
+    },
+    filter: { type: 'lowpass', frequency: 720, Q: 0.8 },
+    filterEnvelope: {
+      attack: 0.015,
+      decay: 0.4,
+      sustain: 0.3,
+      release: 1.2,
+      baseFrequency: 180,
+      octaves: 2.0
+    },
+    volume: -12
+  }).connect(filter);
+
+  return {
+    triggerAttackRelease(freqHz, duration, time, velocity = 0.3, bendCents = 0) {
+      const f = typeof freqHz === 'number' ? freqHz : Tone.Frequency(freqHz).toFrequency();
+      const dur = Math.max(0.4, duration);
+      const t = time ?? Tone.now();
+      pluck.triggerAttack(f, t);
+      if (bendCents > 0) {
+        body.detune.setValueAtTime(0, t);
+        body.detune.linearRampToValueAtTime(bendCents, t + Math.min(0.55, dur * 0.35));
+        body.detune.linearRampToValueAtTime(0, t + Math.min(1.5, dur * 0.9));
+      } else {
+        body.detune.setValueAtTime(0, t);
+      }
+      body.triggerAttackRelease(f, dur, t, velocity);
+    },
+    releaseAll() {
+      try { body.triggerRelease(); } catch (_) { /* ignore */ }
+    },
+    dispose() {
+      try { pluck.dispose(); } catch (_) { /* ignore */ }
+      try { body.dispose(); } catch (_) { /* ignore */ }
+      try { filter.dispose(); } catch (_) { /* ignore */ }
+    }
+  };
+}

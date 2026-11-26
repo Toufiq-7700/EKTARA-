@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { createPRNG } from '../src/algorithms/prng.js';
 import { humaniseEvent, TIMBRE_OPTIONS, DEFAULT_TIMBRES } from '../src/audio/instruments.js';
+import { buildScore } from '../src/algorithms/score.js';
 
 describe('Sound Design — Timbres & Seeded Humanisation', () => {
   it('provides all 4 requested melody timbres plus per-layer timbre dropdown options', () => {
@@ -54,6 +55,17 @@ describe('Sound Design — Timbres & Seeded Humanisation', () => {
     for (let i = 0; i < 20; i++) {
       const h = humaniseEvent(early, rng);
       expect(h.time).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('generates soft deterministic Ektara drone events anchored on root/fifth with gentle pitch bends', () => {
+    const score = buildScore({ seed: 42, depth: 4, rootNote: 60 });
+    const droneEvents = score.events.filter(e => e.voice === 'drone');
+    expect(droneEvents.length).toBeGreaterThanOrEqual(2);
+    for (const ev of droneEvents) {
+      expect([48, 55]).toContain(ev.midi);
+      expect(ev.velocity).toBeLessThanOrEqual(0.4);
+      expect(ev.meta.bendCents === 0 || (ev.meta.bendCents >= 20 && ev.meta.bendCents <= 40)).toBe(true);
     }
   });
 });

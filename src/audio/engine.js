@@ -47,7 +47,8 @@ const layerMuted = {
   canon: false,
   bass: false,
   percussion: false,
-  ambient: false
+  ambient: false,
+  drone: false
 };
 const algorithmDisabled = {
   melody: false,
@@ -194,7 +195,8 @@ export function playScore(score, onEvent, options = {}) {
         canon: isVoiceEffectivelyMuted('canon'),
         bass: isVoiceEffectivelyMuted('bass'),
         percussion: isVoiceEffectivelyMuted('percussion'),
-        ambient: isVoiceEffectivelyMuted('ambient')
+        ambient: isVoiceEffectivelyMuted('ambient'),
+        drone: isVoiceEffectivelyMuted('drone')
       };
       try {
         triggerScoreEvent(graph, { ...event, duration: event.duration / playbackSpeed }, time, liveMuted);
@@ -536,10 +538,38 @@ export function previewEvent(event) {
         melody: isVoiceEffectivelyMuted('melody'),
         canon: isVoiceEffectivelyMuted('canon'),
         bass: isVoiceEffectivelyMuted('bass'),
-        percussion: isVoiceEffectivelyMuted('percussion')
+        percussion: isVoiceEffectivelyMuted('percussion'),
+        drone: isVoiceEffectivelyMuted('drone')
       }
     );
   } catch (_) { /* ignore */ }
+}
+
+/**
+ * Pluck the interactive virtual Ektara string softly at a scale-quantised frequency.
+ * Interaction sound stays gentle and never louder than the background music.
+ */
+export function pluckEktaraString(frequency, bendCents = 25) {
+  if (!isInitialized || !graph?.droneSynth || !frequency) return;
+  if (layerMuted.drone) return;
+  try {
+    const now = Tone.now() + 0.01;
+    graph.droneSynth.triggerAttackRelease(frequency, 1.9, now, 0.28, bendCents);
+  } catch (_) { /* ignore */ }
+}
+
+/**
+ * Normalized master audio level [0, 1] for resting string vibration.
+ */
+export function getAudioLevel() {
+  if (!isInitialized || !isPlaying || !graph?.meter) return 0;
+  try {
+    const db = graph.meter.getValue();
+    if (typeof db !== 'number' || !Number.isFinite(db)) return 0;
+    return Math.max(0, Math.min(1, (db + 55) / 50));
+  } catch (_) {
+    return 0;
+  }
 }
 
 /**

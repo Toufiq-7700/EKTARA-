@@ -11,6 +11,48 @@
 import { createPRNG } from './prng.js';
 import { normalizeParams, MAX_SCORE_EVENTS } from './params.js';
 import { getAlgorithmPlugin } from './registry.js';
+import { midiToFreq, midiToName } from './scales.js';
+
+/**
+ * Generate soft, deterministic Ektara drone events anchored on the root
+ * (and occasionally the fifth) every few beats with gentle pitch-bend metadata.
+ */
+function generateDroneEvents(params, totalSpan, beatDuration) {
+  const rng = createPRNG((params.seed ?? 42) + 4242);
+  const rootMidi = Math.max(36, (params.rootNote ?? 60) - 12);
+  const fifthMidi = rootMidi + 7;
+  const events = [];
+
+  let t = 0.25;
+  let step = 0;
+  while (t < totalSpan - beatDuration) {
+    const useFifth = step > 0 && rng() < 0.28;
+    const midi = useFifth ? fifthMidi : rootMidi;
+    const noteName = midiToName(midi);
+    const bendCents = rng() < 0.45 ? 20 + Math.round(rng() * 20) : 0;
+    const dur = beatDuration * (3.2 + rng() * 1.4);
+    events.push({
+      time: t,
+      voice: 'drone',
+      note: noteName,
+      midi,
+      frequency: midiToFreq(midi),
+      duration: dur,
+      velocity: 0.26 + rng() * 0.1,
+      meta: {
+        role: 'drone',
+        algorithm: 'ektara-drone',
+        label: `Ektara ${useFifth ? 'Fifth' : 'Root'} (${noteName})`,
+        step,
+        isFifth: useFifth,
+        bendCents
+      }
+    });
+    t += beatDuration * (4 + Math.floor(rng() * 3));
+    step++;
+  }
+  return events;
+}
 
 /**
  * Build a complete score from global, role-selection, and per-algorithm parameters.
@@ -49,12 +91,15 @@ export function buildScore(rawParams = {}) {
     melodyValues: melodyRes.values || [0]
   }, rng);
 
+  const droneEvents = generateDroneEvents(params, totalScoreSpan, beatDuration);
+
   // Combine and sort all events chronologically
   const events = [
     ...(melodyRes.events || []),
     ...(bassRes.events || []),
     ...(rhythmRes.events || []),
-    ...(treeRes.events || [])
+    ...(treeRes.events || []),
+    ...droneEvents
   ].sort((a, b) => a.time - b.time);
 
   let eventsCapped = false;

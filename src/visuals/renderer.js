@@ -23,6 +23,12 @@ import {
   drawRainLayer,
   drawRainEffects
 } from './rain.js';
+import {
+  createEktaraStringState,
+  triggerStringPluck,
+  updateEktaraString,
+  drawEktaraString
+} from './ektaraString.js';
 import { createPRNG } from '../algorithms/prng.js';
 
 // ─── State ────────────────────────────────────────────────────────
@@ -47,6 +53,8 @@ let xrayEnabled = false;
 let reducedMotion = false;
 let externalTime = null;
 let hoveredTarget = null;
+let ektaraStringState = createEktaraStringState();
+let getAudioLevelFn = null;
 const visibleAlgorithms = {
   melody: true,
   bass: true,
@@ -248,6 +256,16 @@ export function onVisualEvent(event) {
  */
 export function setTheme(themeName) {
   currentTheme = getTheme(themeName);
+}
+
+export function setAudioLevelGetter(fn) {
+  getAudioLevelFn = typeof fn === 'function' ? fn : null;
+}
+
+export function pluckGardenString(normalizedPos = 0.5, noteLabel = '') {
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  triggerStringPluck(ektaraStringState, normalizedPos, noteLabel, canvas.width / dpr, canvas.height / dpr);
 }
 
 /**
@@ -503,6 +521,11 @@ function animate(now) {
   drawRainLayer(ctx, rainState, 2, currentTheme);
   drawRainEffects(ctx, rainState, currentTheme);
 
+  // Layer 4: Playable virtual Ektara string (left edge / mobile bottom)
+  updateEktaraString(ektaraStringState, motionDt, reducedMotion);
+  const audioLevel = getAudioLevelFn ? getAudioLevelFn() : 0;
+  drawEktaraString(ctx, ektaraStringState, w, h, elapsedTime, audioLevel, reducedMotion);
+
   ctx.restore();
 
   // Reset transform for screen-space vignette and X-ray overlay
@@ -578,6 +601,15 @@ function updateActiveEvents(audioTime) {
         processedPercSteps.add(percKey);
         triggerFirefly(fireflyState, stepNum);
       }
+    } else if (event.voice === 'drone' && canvas) {
+      const dpr = window.devicePixelRatio || 1;
+      triggerStringPluck(
+        ektaraStringState,
+        event.meta?.isFifth ? 0.58 : 0.15,
+        event.note || '',
+        canvas.width / dpr,
+        canvas.height / dpr
+      );
     }
 
     activeEvents.push({ ...event, arrivalTime: elapsedTime });

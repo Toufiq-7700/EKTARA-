@@ -7,6 +7,7 @@
  */
 
 import { ROLES_META, ROLE_ORDER, resolveEventRole } from '../algorithms/meta.js';
+import { midiToName } from '../algorithms/scales.js';
 
 const WINDOW_SECONDS = 12;
 
@@ -20,10 +21,16 @@ export function createTimelineStrip() {
     ctx.clearRect(0, 0, width, height);
     const labelW = 128;
     const trackW = Math.max(80, width - labelW - 12);
-    const laneH = (height - 12) / 4;
+    const laneH = (height - 24) / 4;
     const startT = Math.max(0, currentTime - WINDOW_SECONDS * 0.28);
     const endT = startT + WINDOW_SECONDS;
     const playheadX = labelW + ((currentTime - startT) / WINDOW_SECONDS) * trackW;
+
+    // Harmonic root badge for the Ektara drone
+    const rootMidi = Math.max(36, (score.params?.rootNote ?? 60) - 12);
+    ctx.fillStyle = 'rgba(246, 201, 142, 0.85)';
+    ctx.font = '600 11px system-ui, sans-serif';
+    ctx.fillText(`Ektara Root: ${midiToName(rootMidi)}`, 10, height - 4);
 
     // Draw 4 role lane backgrounds + labels
     for (let laneIdx = 0; laneIdx < ROLE_ORDER.length; laneIdx++) {

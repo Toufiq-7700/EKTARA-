@@ -549,3 +549,42 @@ Rebranded the application to **EKTARA (`একতারা`)** and implemented l
 - **Verification (`tests/i18n.test.js`, `tests/export.test.js`)**: Verified EN/BN key parity and export rebranding tests alongside the full suite (`6` test files, `69` tests passed in Vitest) and `npm run build` (`vite build` succeeded).
 
 ---
+## Prompt 16: Immersive Landing Page, Interactive Ektara String, Lazy-Loaded Audio & Tour
+
+Redesign the welcome screen of EKTARA into an immersive, beautiful landing page that makes a strong first impression within 5 seconds, with a 100vh hero (night-river gradient, drifting stars, soft mist, low-CPU background L-system tree, drifting fireflies, interactive glowing ektara string, logo + "EKTARA" + "একতারা" + tagline, pulsing "Begin the journey" / "শুরু করুন" button, headphone/audio hints, EN | বাংলা toggle, and "How it works" smooth-scroll link), a 4-card "How it works" section with looping mini-canvas animations, a footer with "Built for [Hackathon Name]" and an "About the name" bilingual popover, a 1.2s pluck + fade/slide Begin transition into Split View with a first-visit tooltip tour, lazy-loaded Tone.js/audio code, `prefers-reduced-motion` support, and full accessibility.
+
+### Response
+
+Redesigned the EKTARA landing experience (`index.html`, `src/styles.css`, `src/ui/landing.js`, `src/ui/tour.js`, `src/main.js`, `src/i18n/en.js`, `src/i18n/bn.js`):
+- **Hero Backdrop & Interactive String (`src/ui/landing.js`, `index.html`, `src/styles.css`)**:
+  - Full-viewport `100vh` hero canvas rendering a night-river gradient, slow-drifting stars, soft river mist, drifting fireflies, and a fixed-seed (`137`) low-intensity generative L-system tree reusing `computeTreeBranches`. Respects `prefers-reduced-motion: reduce` with static frames.
+  - Vertical glowing ektara string down the center with gentle sine oscillation that vibrates faster on hover/touch and visually plucks when clicking Begin.
+  - Centered logo emblem, `EKTARA` + `একতারা` + translated tagline, pulsing `"Begin the journey"` / `"শুরু করুন"` CTA (receiving initial keyboard focus), headphone/soft-start hints, top-right `EN | বাংলা` toggle, and `"How it works ↓"` smooth scroll link.
+- **How It Works & About Popover (`index.html`, `src/ui/landing.js`)**:
+  - Added 4 role-colored cards with looping mini-canvas animations for Nørgård, Tower of Hanoi, Euclidean Rhythm, and L-System plus `"One seed. Four recursive rules. Endless music."`, footer placeholder `"Built for [Hackathon Name]"`, and bilingual `<dialog>` popover for `"About the name"`.
+- **Lazy-Loaded Audio & First-Visit Tour (`src/main.js`, `src/ui/tour.js`)**:
+  - Deferred `Tone.js`, `audio/engine.js`, `audio/export.js`, `visuals/renderer.js`, `ui/controls.js`, `lab/labController.js`, and `ui/tour.js` behind dynamic `import()` on Begin click, reducing initial entry JS to `71.22 kB` (`26.24 kB` gzip) while preserving audio-blocked banner/retry handling.
+  - Added 1.2s fade/slide transition into Split View on desktop and a dismissible 3-step first-visit tooltip tour (`localStorage` key `ektara-tour-done`).
+- **Verification**: Ran `npm test` (`6` test files, `69` tests passed) and `npm run build` (`vite build` succeeded with lazy chunks).
+
+---
+## Prompt 17: Playable Virtual Ektara String & Soft Drone Layer
+
+Add a signature interactive feature: a playable virtual ektara in the main app, with a soft "Ektara drone" voice (plucked-string timbre with slow 20–40 cent pitch bends on some plucks, seeded timing, quiet under melody, volume/mute controls, and WAV export), a playable glowing string in the Garden (left edge on desktop, bottom on mobile; click/tap/drag or keyboard Enter/Space + Up/Down arrows; damped sine vibration, scale-quantised pluck, light ripple up into the tree, resting vibration reacting to live audio level, and harmonic root indicator in Lab), plus guided tour and explainer integration respecting `prefers-reduced-motion`.
+
+### Response
+
+Implemented the **Ektara Drone** audio layer and the **Playable Virtual Ektara String** in the Garden:
+- **Ektara Drone Voice & Score Integration (`src/algorithms/score.js`, `src/audio/instruments.js`, `src/audio/graph.js`, `src/audio/engine.js`)**:
+  - Added deterministic `generateDroneEvents` in `src/algorithms/score.js` emitting soft root/fifth drone plucks every few beats (`velocity <= 0.36`, `bendCents` 20–40 on selected plucks).
+  - Added `createDroneVoice` in `src/audio/instruments.js` combining a filtered `Tone.PluckSynth` (Karplus-Strong plucked string) with a warm triangle body supporting smooth 20–40 cent pitch bends.
+  - Added `drone` channel (`DEFAULT_LAYER_VOLUMES.drone = 0.45`, `DEFAULT_LAYER_MIX_DB.drone = -11`), `Tone.Meter` (`getAudioLevel()`), `pluckEktaraString()`, and `triggerScoreEvent` `'drone'` handling in `src/audio/graph.js` and `src/audio/engine.js` (included automatically in `Tone.Offline` WAV export).
+- **Playable Garden String, Light Ripples & Lab Root (`src/visuals/ektaraString.js`, `src/visuals/renderer.js`, `src/lab/timelineStrip.js`, `index.html`, `src/styles.css`, `src/main.js`)**:
+  - Added `src/visuals/ektaraString.js` rendering the glowing string along the left edge on desktop (bottom on mobile), reacting gently to live audio level, vibrating with a damped sine wave on pluck, and sending soft light ripples up into the tree while respecting `prefers-reduced-motion`.
+  - Wired `#garden-ektara-string` for pointer click/tap/drag and keyboard access (`Enter`/`Space` to pluck, `ArrowUp`/`ArrowDown` to step pitch along the current scale within an octave).
+  - Displayed `Ektara Root: <Note>` in `src/lab/timelineStrip.js`.
+- **Controls, Tour, Explainer, i18n & Tests (`src/ui/controls.js`, `src/ui/tour.js`, `src/i18n/en.js`, `src/i18n/bn.js`, `tests/sound.test.js`)**:
+  - Added `Ektara Drone` volume/mute row and explainer entry (*"This is your ektara: pluck it to play along."*), plus Step 4 of the first-visit tooltip tour.
+  - Added drone score generation test in `tests/sound.test.js`; verified `npm test` (`6` test files, `70` tests passed) and `npm run build` pass.
+
+---
